@@ -6,6 +6,7 @@ export interface KakitoriSettings {
   showSentenceNumbersOnHover: boolean;
   azureRegion: string;
   azureVoice: string;
+  azureSpeechKey: string;
 }
 
 export interface KakitoriSentence {
@@ -37,6 +38,7 @@ export interface ImportedMaterial {
 export const DEFAULT_SETTINGS: KakitoriSettings = {
   defaultDirection: "vertical",
   showSentenceNumbersOnHover: false,
-  azureRegion: "",
-  azureVoice: "ja-JP-NanamiNeural"
+  azureRegion: "eastus2",
+  azureVoice: "ja-JP-NanamiNeural",
+  azureSpeechKey: ""
 };

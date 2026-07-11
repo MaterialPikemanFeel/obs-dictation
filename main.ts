@@ -17,7 +17,6 @@ export default class KakitoriPlugin extends Plugin {
   storage!: KakitoriStorage;
   tts!: AzureTtsService;
   kakitoriSettings!: KakitoriSettings;
-  private sessionAzureSpeechKey: string | null = null;
 
   async onload(): Promise<void> {
     this.storage = new KakitoriStorage(this.app);
@@ -85,24 +84,29 @@ export default class KakitoriPlugin extends Plugin {
     const storedKey = this.app.secretStorage
       ?.getSecret(AZURE_SPEECH_KEY_ID)
       ?.trim();
-    return storedKey || this.sessionAzureSpeechKey;
+    return storedKey || this.kakitoriSettings.azureSpeechKey.trim() || null;
   }
 
-  setAzureSpeechKey(key: string): void {
+  async setAzureSpeechKey(key: string): Promise<void> {
     const normalizedKey = key.trim();
     if (this.app.secretStorage) {
       this.app.secretStorage.setSecret(AZURE_SPEECH_KEY_ID, normalizedKey);
-      this.sessionAzureSpeechKey = null;
+      if (this.kakitoriSettings.azureSpeechKey) {
+        this.kakitoriSettings.azureSpeechKey = "";
+        await this.saveSettings();
+      }
       return;
     }
-    this.sessionAzureSpeechKey = normalizedKey || null;
+    this.kakitoriSettings.azureSpeechKey = normalizedKey;
+    await this.saveSettings();
   }
 
-  clearAzureSpeechKey(): void {
+  async clearAzureSpeechKey(): Promise<void> {
     if (this.app.secretStorage) {
       this.app.secretStorage.setSecret(AZURE_SPEECH_KEY_ID, "");
     }
-    this.sessionAzureSpeechKey = null;
+    this.kakitoriSettings.azureSpeechKey = "";
+    await this.saveSettings();
   }
 
   async refreshViews(): Promise<void> {
