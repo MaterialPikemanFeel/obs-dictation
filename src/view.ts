@@ -16,10 +16,7 @@ import {
   countParagraphs,
   countWritingCharacters
 } from "./segmenter";
-import {
-  AZURE_SPEECH_KEY_ID,
-  type AzureSpeechConfig
-} from "./tts";
+import type { AzureSpeechConfig } from "./tts";
 import type {
   CardDeckMode,
   KakitoriMaterial,
@@ -1353,9 +1350,7 @@ export class KakitoriView extends ItemView {
 
   private getAzureSpeechConfig(): AzureSpeechConfig | null {
     const region = this.plugin.kakitoriSettings.azureRegion.trim();
-    const subscriptionKey = this.app.secretStorage
-      .getSecret(AZURE_SPEECH_KEY_ID)
-      ?.trim();
+    const subscriptionKey = this.plugin.getAzureSpeechKey();
     if (!region || !subscriptionKey) {
       return null;
     }

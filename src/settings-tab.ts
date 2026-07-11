@@ -1,7 +1,6 @@
 import { PluginSettingTab, Setting } from "obsidian";
 import type { App } from "obsidian";
 import type KakitoriPlugin from "../main";
-import { AZURE_SPEECH_KEY_ID } from "./tts";
 
 export class KakitoriSettingTab extends PluginSettingTab {
   constructor(app: App, private readonly plugin: KakitoriPlugin) {
@@ -71,13 +70,16 @@ export class KakitoriSettingTab extends PluginSettingTab {
           })
       );
 
-    const existingKey = this.app.secretStorage.getSecret(AZURE_SPEECH_KEY_ID);
+    const existingKey = this.plugin.getAzureSpeechKey();
+    const hasSecureStorage = this.plugin.hasSecureSecretStorage();
     new Setting(this.containerEl)
       .setName("Azure Speech 密钥")
       .setDesc(
-        existingKey
-          ? "密钥已安全保存在 Obsidian；输入新密钥可替换。"
-          : "密钥只保存在 Obsidian 的安全存储中，不写入 Vault。"
+        hasSecureStorage
+          ? existingKey
+            ? "密钥已安全保存在 Obsidian；输入新密钥可替换。"
+            : "密钥只保存在 Obsidian 的安全存储中，不写入 Vault。"
+          : "当前 Obsidian 不支持安全存储；密钥仅在本次启动期间有效。"
       )
       .addText((text) => {
         text.inputEl.type = "password";
@@ -85,13 +87,13 @@ export class KakitoriSettingTab extends PluginSettingTab {
         text.onChange((value) => {
           const key = value.trim();
           if (key) {
-            this.app.secretStorage.setSecret(AZURE_SPEECH_KEY_ID, key);
+            this.plugin.setAzureSpeechKey(key);
           }
         });
       })
       .addButton((button) =>
         button.setButtonText("清除密钥").onClick(() => {
-          this.app.secretStorage.setSecret(AZURE_SPEECH_KEY_ID, "");
+          this.plugin.clearAzureSpeechKey();
           this.display();
         })
       );

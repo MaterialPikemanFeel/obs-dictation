@@ -2,7 +2,10 @@ import { Notice, Plugin } from "obsidian";
 import type { WorkspaceLeaf } from "obsidian";
 import { KakitoriSettingTab } from "./src/settings-tab";
 import { KakitoriStorage } from "./src/storage";
-import { AzureTtsService } from "./src/tts";
+import {
+  AZURE_SPEECH_KEY_ID,
+  AzureTtsService
+} from "./src/tts";
 import type {
   ImportedMaterial,
   KakitoriMaterial,
@@ -14,6 +17,7 @@ export default class KakitoriPlugin extends Plugin {
   storage!: KakitoriStorage;
   tts!: AzureTtsService;
   kakitoriSettings!: KakitoriSettings;
+  private sessionAzureSpeechKey: string | null = null;
 
   async onload(): Promise<void> {
     this.storage = new KakitoriStorage(this.app);
@@ -71,6 +75,34 @@ export default class KakitoriPlugin extends Plugin {
 
   async saveSettings(): Promise<void> {
     await this.storage.saveSettings(this.kakitoriSettings);
+  }
+
+  hasSecureSecretStorage(): boolean {
+    return Boolean(this.app.secretStorage);
+  }
+
+  getAzureSpeechKey(): string | null {
+    const storedKey = this.app.secretStorage
+      ?.getSecret(AZURE_SPEECH_KEY_ID)
+      ?.trim();
+    return storedKey || this.sessionAzureSpeechKey;
+  }
+
+  setAzureSpeechKey(key: string): void {
+    const normalizedKey = key.trim();
+    if (this.app.secretStorage) {
+      this.app.secretStorage.setSecret(AZURE_SPEECH_KEY_ID, normalizedKey);
+      this.sessionAzureSpeechKey = null;
+      return;
+    }
+    this.sessionAzureSpeechKey = normalizedKey || null;
+  }
+
+  clearAzureSpeechKey(): void {
+    if (this.app.secretStorage) {
+      this.app.secretStorage.setSecret(AZURE_SPEECH_KEY_ID, "");
+    }
+    this.sessionAzureSpeechKey = null;
   }
 
   async refreshViews(): Promise<void> {
