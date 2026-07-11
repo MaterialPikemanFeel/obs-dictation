@@ -1,6 +1,6 @@
 {
   "name": "obsidian-kakitori",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "A focused Japanese dictation workspace for Obsidian.",
   "main": "main.js",

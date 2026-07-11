@@ -257,7 +257,7 @@ export class KakitoriView extends ItemView {
       cls: "kakitori-mode-card kakitori-mode-card-primary"
     });
     const paperIcon = paperMode.createDiv({ cls: "kakitori-mode-icon" });
-    setIcon(paperIcon, "grid-3x3");
+    paperIcon.createDiv({ cls: "kakitori-paper-mode-glyph" });
     paperMode.createEl("h2", { text: "原稿用紙" });
     paperMode.createEl("p", {
       text: "在标准 20×20 原稿纸上逐句听写、揭示和记录。"
@@ -276,7 +276,7 @@ export class KakitoriView extends ItemView {
     });
     cardMode.disabled = true;
     const cardIcon = cardMode.createDiv({ cls: "kakitori-mode-icon" });
-    setIcon(cardIcon, "rectangle-horizontal");
+    cardIcon.createDiv({ cls: "kakitori-card-mode-glyph" });
     cardMode.createEl("h2", { text: "卡片练习" });
     cardMode.createEl("p", {
       text: "逐句听写模式将在下一阶段接入。"
