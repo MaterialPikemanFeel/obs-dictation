@@ -25,7 +25,7 @@ its imported materials separate from ordinary notes and stores its data under
 - Independent card progress and restart
 - Vertical or horizontal answers following the article direction
 - Shared sentence difficulty flags and notes
-- Azure Speech playback with persistent settings and region selection
+- Azure Speech playback with live ja-JP voice discovery
 - Per-sentence MP3 caching under `_Kakitori/Cache`
 
 Vocabulary collection and audio cache limits/cleanup remain planned for later

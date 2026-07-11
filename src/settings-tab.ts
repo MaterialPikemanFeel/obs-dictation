@@ -1,6 +1,11 @@
 import { Notice, PluginSettingTab, Setting } from "obsidian";
-import type { App } from "obsidian";
+import type {
+  App,
+  ButtonComponent,
+  DropdownComponent
+} from "obsidian";
 import type KakitoriPlugin from "../main";
+import type { AzureVoiceOption } from "./tts";
 
 const AZURE_REGIONS = [
   ["eastus", "East US"],
@@ -31,7 +36,7 @@ const AZURE_REGIONS = [
   ["southafricanorth", "South Africa North"]
 ] as const;
 
-const JAPANESE_VOICES = [
+const FALLBACK_JAPANESE_VOICES = [
   ["ja-JP-NanamiNeural", "Nanami（女声）"],
   ["ja-JP-AoiNeural", "Aoi（女声）"],
   ["ja-JP-MayuNeural", "Mayu（女声）"],
@@ -85,6 +90,8 @@ export class KakitoriSettingTab extends PluginSettingTab {
     const existingKey = this.plugin.getAzureSpeechKey();
     const hasSecureStorage = this.plugin.hasSecureSecretStorage();
     let keyInput: HTMLInputElement | null = null;
+    let voiceDropdown: DropdownComponent | null = null;
+    let refreshVoiceButton: ButtonComponent | null = null;
     new Setting(this.containerEl)
       .setName("API Key")
       .setDesc(
@@ -136,10 +143,21 @@ export class KakitoriSettingTab extends PluginSettingTab {
 
     new Setting(this.containerEl)
       .setName("日语音色")
-      .setDesc("生成新音频时使用；已缓存的句子不会重复请求。")
+      .setDesc("从 Azure 实时查询 ja-JP 音色，包括可用的 HD／Latest 模型。")
       .addDropdown((dropdown) => {
-        for (const [value, label] of JAPANESE_VOICES) {
+        for (const [value, label] of FALLBACK_JAPANESE_VOICES) {
           dropdown.addOption(value, label);
+        }
+        if (
+          !FALLBACK_JAPANESE_VOICES.some(
+            ([value]) =>
+              value === this.plugin.kakitoriSettings.azureVoice
+          )
+        ) {
+          dropdown.addOption(
+            this.plugin.kakitoriSettings.azureVoice,
+            this.plugin.kakitoriSettings.azureVoice
+          );
         }
         dropdown
           .setValue(this.plugin.kakitoriSettings.azureVoice)
@@ -147,6 +165,19 @@ export class KakitoriSettingTab extends PluginSettingTab {
             this.plugin.kakitoriSettings.azureVoice = value;
             await this.plugin.saveSettings();
           });
+        voiceDropdown = dropdown;
+      })
+      .addButton((button) => {
+        refreshVoiceButton = button;
+        button.setButtonText("查询音色").onClick(async () => {
+          if (voiceDropdown) {
+            await this.refreshJapaneseVoices(
+              voiceDropdown,
+              button,
+              true
+            );
+          }
+        });
       });
 
     new Setting(this.containerEl)
@@ -181,5 +212,98 @@ export class KakitoriSettingTab extends PluginSettingTab {
             }
           })
       );
+
+    if (existingKey && voiceDropdown && refreshVoiceButton) {
+      void this.refreshJapaneseVoices(
+        voiceDropdown,
+        refreshVoiceButton,
+        false
+      );
+    }
   }
+
+  private async refreshJapaneseVoices(
+    dropdown: DropdownComponent,
+    button: ButtonComponent,
+    showResult: boolean
+  ): Promise<void> {
+    const subscriptionKey = this.plugin.getAzureSpeechKey();
+    if (!subscriptionKey) {
+      if (showResult) {
+        new Notice("请先填写 API Key。");
+      }
+      return;
+    }
+
+    const originalText = button.buttonEl.textContent ?? "查询音色";
+    button.setDisabled(true).setButtonText("查询中…");
+    try {
+      const voices = await this.plugin.tts.listJapaneseVoices(
+        this.plugin.kakitoriSettings.azureRegion,
+        subscriptionKey
+      );
+      if (voices.length === 0) {
+        throw new Error("No Japanese voices returned");
+      }
+      dropdown.selectEl.replaceChildren();
+      for (const voice of voices) {
+        dropdown.addOption(
+          voice.shortName,
+          this.formatVoiceLabel(voice)
+        );
+      }
+      const selectedVoice = voices.some(
+        (voice) =>
+          voice.shortName === this.plugin.kakitoriSettings.azureVoice
+      )
+        ? this.plugin.kakitoriSettings.azureVoice
+        : voices[0].shortName;
+      dropdown.setValue(selectedVoice);
+      if (selectedVoice !== this.plugin.kakitoriSettings.azureVoice) {
+        this.plugin.kakitoriSettings.azureVoice = selectedVoice;
+        await this.plugin.saveSettings();
+      }
+      if (showResult) {
+        new Notice(`已获取 ${voices.length} 个日语音色。`);
+      }
+    } catch {
+      if (showResult) {
+        new Notice("查询失败，请检查 API Key 和区域是否匹配。");
+      }
+    } finally {
+      button.setDisabled(false).setButtonText(originalText);
+    }
+  }
+
+  private formatVoiceLabel(voice: AzureVoiceOption): string {
+    const gender =
+      voice.gender.toLowerCase() === "female"
+        ? "女声"
+        : voice.gender.toLowerCase() === "male"
+          ? "男声"
+          : voice.gender;
+    const model = getVoiceModelLabel(voice);
+    const name = model ? `${voice.displayName} ${model}` : voice.displayName;
+    const status =
+      voice.status && voice.status.toLowerCase() !== "ga"
+        ? ` · ${voice.status}`
+        : "";
+    return `${name} · ${gender} · ${voice.locale}${status}`;
+  }
+}
+
+function getVoiceModelLabel(voice: AzureVoiceOption): string {
+  const model = voice.shortName.split(":")[1] ?? "";
+  if (!model) {
+    return "";
+  }
+  const readable = model
+    .replace(/Neural$/u, "")
+    .replace(/([a-z])([A-Z])/gu, "$1 $2")
+    .replace(/HD/gu, " HD")
+    .replace(/\s+/gu, " ")
+    .trim();
+  return voice.displayName.toLowerCase().includes(readable.toLowerCase())
+    ? ""
+    : readable;
 }

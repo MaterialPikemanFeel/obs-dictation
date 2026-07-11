@@ -11,6 +11,17 @@ export interface AzureSpeechConfig {
   subscriptionKey: string;
 }
 
+export interface AzureVoiceOption {
+  shortName: string;
+  displayName: string;
+  localName: string;
+  gender: string;
+  locale: string;
+  voiceType: string;
+  status: string;
+  styles: string[];
+}
+
 export class AzureTtsService {
   private currentAudio: HTMLAudioElement | null = null;
   private currentAudioUrl: string | null = null;
@@ -20,6 +31,43 @@ export class AzureTtsService {
 
   async prepare(text: string, config: AzureSpeechConfig): Promise<void> {
     await this.getAudio(text, config);
+  }
+
+  async listJapaneseVoices(
+    region: string,
+    subscriptionKey: string
+  ): Promise<AzureVoiceOption[]> {
+    this.validateRegion(region);
+    const response = await requestUrl({
+      url: `https://${region}.tts.speech.microsoft.com/cognitiveservices/voices/list`,
+      method: "GET",
+      headers: {
+        "Ocp-Apim-Subscription-Key": subscriptionKey
+      },
+      throw: false
+    });
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(`Azure voice list request failed (${response.status})`);
+    }
+    const payload: unknown = response.json;
+    if (!Array.isArray(payload)) {
+      throw new Error("Azure voice list response is invalid");
+    }
+    return payload
+      .map(parseAzureVoice)
+      .filter(
+        (voice): voice is AzureVoiceOption =>
+          voice !== null && voice.locale.toLowerCase() === "ja-jp"
+      )
+      .sort((left, right) => {
+        const modelPriority =
+          Number(right.shortName.includes(":DragonHD")) -
+          Number(left.shortName.includes(":DragonHD"));
+        return (
+          modelPriority ||
+          left.displayName.localeCompare(right.displayName, "en")
+        );
+      });
   }
 
   async play(
@@ -91,9 +139,7 @@ export class AzureTtsService {
     text: string,
     config: AzureSpeechConfig
   ): Promise<ArrayBuffer> {
-    if (!/^[a-z0-9-]+$/i.test(config.region)) {
-      throw new Error("Azure region is invalid");
-    }
+    this.validateRegion(config.region);
     const response = await requestUrl({
       url: `https://${config.region}.tts.speech.microsoft.com/cognitiveservices/v1`,
       method: "POST",
@@ -137,6 +183,12 @@ export class AzureTtsService {
       this.currentAudioUrl = null;
     }
   }
+
+  private validateRegion(region: string): void {
+    if (!/^[a-z0-9-]+$/i.test(region)) {
+      throw new Error("Azure region is invalid");
+    }
+  }
 }
 
 function escapeXml(value: string): string {
@@ -146,4 +198,51 @@ function escapeXml(value: string): string {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&apos;");
+}
+
+function parseAzureVoice(value: unknown): AzureVoiceOption | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const shortName = readString(value, "ShortName") || readString(value, "Name");
+  const locale = readString(value, "Locale");
+  if (!shortName || !locale) {
+    return null;
+  }
+  const displayName =
+    readString(value, "DisplayName") ||
+    readString(value, "LocalName") ||
+    shortName;
+  return {
+    shortName,
+    displayName,
+    localName: readString(value, "LocalName") || displayName,
+    gender: readString(value, "Gender") || "Unknown",
+    locale,
+    voiceType: readString(value, "VoiceType") || "Neural",
+    status: readString(value, "Status"),
+    styles: readStringArray(value, "StyleList")
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function readString(
+  value: Record<string, unknown>,
+  key: string
+): string {
+  const candidate = value[key];
+  return typeof candidate === "string" ? candidate : "";
+}
+
+function readStringArray(
+  value: Record<string, unknown>,
+  key: string
+): string[] {
+  const candidate = value[key];
+  return Array.isArray(candidate)
+    ? candidate.filter((item): item is string => typeof item === "string")
+    : [];
 }
