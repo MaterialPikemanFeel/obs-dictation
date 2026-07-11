@@ -2,6 +2,7 @@ import { Notice, Plugin } from "obsidian";
 import type { WorkspaceLeaf } from "obsidian";
 import { KakitoriSettingTab } from "./src/settings-tab";
 import { KakitoriStorage } from "./src/storage";
+import { AzureTtsService } from "./src/tts";
 import type {
   ImportedMaterial,
   KakitoriMaterial,
@@ -11,10 +12,12 @@ import { KakitoriView, VIEW_TYPE_KAKITORI } from "./src/view";
 
 export default class KakitoriPlugin extends Plugin {
   storage!: KakitoriStorage;
+  tts!: AzureTtsService;
   kakitoriSettings!: KakitoriSettings;
 
   async onload(): Promise<void> {
     this.storage = new KakitoriStorage(this.app);
+    this.tts = new AzureTtsService(this.app);
     await this.storage.initialize();
     this.kakitoriSettings = await this.storage.loadSettings();
 
@@ -37,6 +40,7 @@ export default class KakitoriPlugin extends Plugin {
   }
 
   onunload(): void {
+    this.tts.stop();
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_KAKITORI);
   }
 

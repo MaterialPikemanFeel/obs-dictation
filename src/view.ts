@@ -16,6 +16,10 @@ import {
   countParagraphs,
   countWritingCharacters
 } from "./segmenter";
+import {
+  AZURE_SPEECH_KEY_ID,
+  type AzureSpeechConfig
+} from "./tts";
 import type {
   CardDeckMode,
   KakitoriMaterial,
@@ -335,6 +339,12 @@ export class KakitoriView extends ItemView {
       this.screen = "card";
       this.render();
     });
+    const prepareAudio = progressActions.createEl("button", {
+      text: `预生成整篇音频（${material.sentences.length} 句）`
+    });
+    prepareAudio.addEventListener("click", () => {
+      void this.prepareArticleAudio(material, prepareAudio);
+    });
     progressActions.createSpan({
       text: "只重置位置与揭示状态，难句和笔记会保留。"
     });
@@ -546,12 +556,16 @@ export class KakitoriView extends ItemView {
       attr: { "aria-label": "播放", title: "播放" }
     });
     setIcon(play, "play");
-    play.addEventListener("click", () => this.showTtsNotice());
+    play.addEventListener("click", () => {
+      void this.playSelectedSentence();
+    });
     const replay = playback.createEl("button", {
       attr: { "aria-label": "重听", title: "重听" }
     });
     setIcon(replay, "rotate-ccw");
-    replay.addEventListener("click", () => this.showTtsNotice());
+    replay.addEventListener("click", () => {
+      void this.playSelectedSentence();
+    });
     const speed = playback.createEl("button", {
       cls: "kakitori-card-speed",
       text: `${this.playbackSpeed}x`
@@ -915,6 +929,7 @@ export class KakitoriView extends ItemView {
     if (nextIndex === this.currentCardIndex) {
       return;
     }
+    this.plugin.tts.stop();
     this.currentCardIndex = nextIndex;
     this.cardRevealed = false;
     this.selectedSentenceId = this.cardSequenceIds[nextIndex] ?? null;
@@ -1009,10 +1024,10 @@ export class KakitoriView extends ItemView {
     }
 
     this.createControlButton(controls, "播放", "play", () => {
-      this.showTtsNotice();
+      void this.playSelectedSentence();
     });
     this.createControlButton(controls, "重听", "rotate-ccw", () => {
-      this.showTtsNotice();
+      void this.playSelectedSentence();
     });
     const speed = controls.createEl("button", {
       attr: { "aria-label": "语速" },
@@ -1146,6 +1161,7 @@ export class KakitoriView extends ItemView {
   }
 
   private changePage(delta: number, material: KakitoriMaterial): void {
+    this.plugin.tts.stop();
     const pageCount = getPaperPageCount(material.sentences);
     this.currentPage = Math.min(
       Math.max(this.currentPage + delta, 0),
@@ -1169,6 +1185,7 @@ export class KakitoriView extends ItemView {
   }
 
   private openLibrary(): void {
+    this.plugin.tts.stop();
     this.screen = "library";
     this.activeMaterial = null;
     this.revealedSentenceIds.clear();
@@ -1180,6 +1197,7 @@ export class KakitoriView extends ItemView {
   }
 
   private openArticleHome(): void {
+    this.plugin.tts.stop();
     this.screen = "home";
     this.revealedSentenceIds.clear();
     this.cardSequenceIds = [];
@@ -1194,6 +1212,7 @@ export class KakitoriView extends ItemView {
     if (!material) {
       return;
     }
+    this.plugin.tts.stop();
     this.currentPage = Math.min(
       material.lastPaperPage,
       getPaperPageCount(material.sentences) - 1
@@ -1210,6 +1229,7 @@ export class KakitoriView extends ItemView {
     if (!material) {
       return;
     }
+    this.plugin.tts.stop();
     this.cardDeckMode = "all";
     this.cardSequenceIds = this.buildCardSequence(material, "all");
     const savedIndex = material.lastCardSentenceId
@@ -1241,10 +1261,10 @@ export class KakitoriView extends ItemView {
     if (this.screen === "card") {
       if (event.key === " ") {
         event.preventDefault();
-        this.showTtsNotice();
+        void this.playSelectedSentence();
       } else if (event.key.toLowerCase() === "r") {
         event.preventDefault();
-        this.showTtsNotice();
+        void this.playSelectedSentence();
       } else if (event.key === "Enter") {
         event.preventDefault();
         this.toggleCardReveal();
@@ -1263,10 +1283,10 @@ export class KakitoriView extends ItemView {
     }
     if (event.key === " ") {
       event.preventDefault();
-      this.showTtsNotice();
+      void this.playSelectedSentence();
     } else if (event.key.toLowerCase() === "r") {
       event.preventDefault();
-      this.showTtsNotice();
+      void this.playSelectedSentence();
     } else if (event.key === "Enter" && this.selectedSentenceId) {
       event.preventDefault();
       this.toggleSentenceReveal(this.selectedSentenceId);
@@ -1279,8 +1299,71 @@ export class KakitoriView extends ItemView {
     }
   }
 
-  private showTtsNotice(): void {
-    new Notice("Azure TTS 将在下一阶段接入。");
+  private async playSelectedSentence(): Promise<void> {
+    const material = this.activeMaterial;
+    const sentence = material?.sentences.find(
+      (candidate) => candidate.id === this.selectedSentenceId
+    );
+    if (!sentence) {
+      new Notice("请先选择一句。");
+      return;
+    }
+    const config = this.getAzureSpeechConfig();
+    if (!config) {
+      new Notice("请先在 Kakitori 设置中填写 Azure 区域和 Speech 密钥。");
+      return;
+    }
+    try {
+      await this.plugin.tts.play(
+        sentence.text,
+        config,
+        this.playbackSpeed
+      );
+    } catch {
+      new Notice("语音播放失败，请检查 Azure 区域、密钥和网络。");
+    }
+  }
+
+  private async prepareArticleAudio(
+    material: KakitoriMaterial,
+    button: HTMLButtonElement
+  ): Promise<void> {
+    const config = this.getAzureSpeechConfig();
+    if (!config) {
+      new Notice("请先在 Kakitori 设置中填写 Azure 区域和 Speech 密钥。");
+      return;
+    }
+    button.disabled = true;
+    const originalText = button.textContent ?? "预生成整篇音频";
+    try {
+      for (const [index, sentence] of material.sentences.entries()) {
+        button.setText(
+          `正在生成 ${index + 1} / ${material.sentences.length}`
+        );
+        await this.plugin.tts.prepare(sentence.text, config);
+      }
+      new Notice("整篇音频已缓存。");
+    } catch {
+      new Notice("音频生成中断，请检查 Azure 设置和网络。");
+    } finally {
+      button.disabled = false;
+      button.setText(originalText);
+    }
+  }
+
+  private getAzureSpeechConfig(): AzureSpeechConfig | null {
+    const region = this.plugin.kakitoriSettings.azureRegion.trim();
+    const subscriptionKey = this.app.secretStorage
+      .getSecret(AZURE_SPEECH_KEY_ID)
+      ?.trim();
+    if (!region || !subscriptionKey) {
+      return null;
+    }
+    return {
+      region,
+      voice: this.plugin.kakitoriSettings.azureVoice,
+      subscriptionKey
+    };
   }
 
   private scheduleSave(): void {

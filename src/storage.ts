@@ -69,7 +69,10 @@ export class KakitoriStorage {
         defaultDirection:
           parsed.defaultDirection === "horizontal" ? "horizontal" : "vertical",
         showSentenceNumbersOnHover:
-          parsed.showSentenceNumbersOnHover === true
+          parsed.showSentenceNumbersOnHover === true,
+        azureRegion: parsed.azureRegion?.trim() ?? "",
+        azureVoice:
+          parsed.azureVoice?.trim() || DEFAULT_SETTINGS.azureVoice
       };
     } catch {
       return { ...DEFAULT_SETTINGS };

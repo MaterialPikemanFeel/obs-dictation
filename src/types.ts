@@ -4,6 +4,8 @@ export type CardDeckMode = "all" | "difficult" | "random";
 export interface KakitoriSettings {
   defaultDirection: WritingDirection;
   showSentenceNumbersOnHover: boolean;
+  azureRegion: string;
+  azureVoice: string;
 }
 
 export interface KakitoriSentence {
@@ -34,5 +36,7 @@ export interface ImportedMaterial {
 
 export const DEFAULT_SETTINGS: KakitoriSettings = {
   defaultDirection: "vertical",
-  showSentenceNumbersOnHover: false
+  showSentenceNumbersOnHover: false,
+  azureRegion: "",
+  azureVoice: "ja-JP-NanamiNeural"
 };

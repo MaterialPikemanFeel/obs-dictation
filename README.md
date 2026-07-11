@@ -25,9 +25,11 @@ its imported materials separate from ordinary notes and stores its data under
 - Independent card progress and restart
 - Vertical or horizontal answers following the article direction
 - Shared sentence difficulty flags and notes
+- Azure Speech playback with keys stored in Obsidian SecretStorage
+- Per-sentence MP3 caching under `_Kakitori/Cache`
 
-Azure TTS, vocabulary collection, and audio cache management remain planned for
-later phases.
+Vocabulary collection and audio cache limits/cleanup remain planned for later
+phases.
 
 ## Development
 

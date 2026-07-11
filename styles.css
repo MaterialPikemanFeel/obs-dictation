@@ -431,6 +431,7 @@
 .kakitori-progress-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   margin-top: 12px;
   gap: 10px;
   color: var(--text-muted);
