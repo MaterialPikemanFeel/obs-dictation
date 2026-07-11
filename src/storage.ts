@@ -7,13 +7,13 @@ import {
   type KakitoriMaterial,
   type KakitoriSettings,
   type KakitoriSentence,
+  type KakitoriTextHighlight,
   type WritingDirection
 } from "./types";
 
 const ROOT = "_Kakitori";
 const MATERIALS_DIRECTORY = `${ROOT}/Materials`;
 const NOTEBOOKS_DIRECTORY = `${ROOT}/Notebooks`;
-const VOCABULARY_DIRECTORY = `${ROOT}/Vocabulary`;
 const CACHE_DIRECTORY = `${ROOT}/Cache`;
 const SETTINGS_PATH = `${ROOT}/settings.json`;
 
@@ -33,6 +33,8 @@ interface MaterialFile {
 interface SentenceNotebookEntry {
   note: string;
   difficult: boolean;
+  highlights?: KakitoriTextHighlight[];
+  recordedAt?: string | null;
 }
 
 interface NotebookFile {
@@ -50,7 +52,6 @@ export class KakitoriStorage {
       ROOT,
       MATERIALS_DIRECTORY,
       NOTEBOOKS_DIRECTORY,
-      VOCABULARY_DIRECTORY,
       CACHE_DIRECTORY
     ]) {
       await this.ensureFolder(folder);
@@ -122,7 +123,9 @@ export class KakitoriStorage {
         text: sentence.text,
         startsParagraph: sentence.startsParagraph,
         note: "",
-        difficult: false
+        difficult: false,
+        highlights: [],
+        recordedAt: null
       })),
       fullNote: "",
       createdAt: now,
@@ -158,7 +161,9 @@ export class KakitoriStorage {
           sentence.id,
           {
             note: sentence.note,
-            difficult: sentence.difficult
+            difficult: sentence.difficult,
+            highlights: sentence.highlights,
+            recordedAt: sentence.recordedAt
           }
         ])
       )
@@ -191,7 +196,15 @@ export class KakitoriStorage {
           text: segmentedSentence.text,
           startsParagraph: segmentedSentence.startsParagraph,
           note: notebookEntry?.note ?? "",
-          difficult: notebookEntry?.difficult ?? false
+          difficult: notebookEntry?.difficult ?? false,
+          highlights: normalizeHighlights(
+            notebookEntry?.highlights,
+            segmentedSentence.text
+          ),
+          recordedAt:
+            typeof notebookEntry?.recordedAt === "string"
+              ? notebookEntry.recordedAt
+              : null
         };
         }
       );
@@ -249,4 +262,23 @@ export class KakitoriStorage {
   private notebookPath(id: string): string {
     return `${NOTEBOOKS_DIRECTORY}/${id}.json`;
   }
+}
+
+function normalizeHighlights(
+  highlights: KakitoriTextHighlight[] | undefined,
+  text: string
+): KakitoriTextHighlight[] {
+  if (!Array.isArray(highlights)) {
+    return [];
+  }
+  const characterCount = Array.from(text).length;
+  return highlights.filter(
+    (highlight) =>
+      typeof highlight?.id === "string" &&
+      Number.isInteger(highlight.start) &&
+      Number.isInteger(highlight.end) &&
+      highlight.start >= 0 &&
+      highlight.end > highlight.start &&
+      highlight.end <= characterCount
+  );
 }

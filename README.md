@@ -15,13 +15,13 @@ its imported materials separate from ordinary notes and stores its data under
 - Automatic 400-character pagination
 - Opaque sentence masks
 - Contextual vertical or horizontal controls
-- Reveal, reconceal, difficult-sentence flags, and notes
+- Reveal, reconceal, writing-difficulty flags, and notes
 - Data stored in `_Kakitori/Materials` and `_Kakitori/Notebooks`
 
 ## Phase 2
 
 - Card practice with manual reveal and reconceal
-- Full-order, difficult-sentence, and random decks
+- Full-order, writing-difficulty, and random decks
 - Independent card progress and restart
 - Vertical or horizontal answers following the article direction
 - Shared sentence difficulty flags and notes
@@ -29,8 +29,16 @@ its imported materials separate from ordinary notes and stores its data under
 - Per-sentence MP3 caching under `_Kakitori/Cache`
 - In-place audio regeneration from paper and card controls
 
-Vocabulary collection and audio cache limits/cleanup remain planned for later
-phases.
+## Phase 3
+
+- Select any part of a revealed sentence
+- Highlight the selection and save the full sentence as one record
+- Multiple highlights within the same sentence
+- Global records page with source links and notes
+- Remove individual highlights or the whole record
+- Jump from a record back to its revealed paper sentence
+
+Audio cache limits and cleanup remain planned for a later phase.
 
 ## Development
 

@@ -100,6 +100,11 @@
   gap: 8px;
 }
 
+.kakitori-topbar-actions button.is-active {
+  color: var(--kakitori-accent);
+  background: var(--kakitori-accent-soft);
+}
+
 .kakitori-topbar-actions .mod-cta,
 .kakitori-empty-state .mod-cta {
   border-color: var(--kakitori-accent);
@@ -758,6 +763,18 @@
   user-select: text;
 }
 
+.kakitori-paper-character.is-selectable {
+  cursor: text;
+  pointer-events: auto;
+}
+
+.kakitori-paper-character.is-highlighted,
+.kakitori-sentence-character.is-highlighted {
+  border-radius: 2px;
+  background: rgba(255, 211, 82, 0.52);
+  box-shadow: inset 0 -0.22em 0 rgba(242, 174, 36, 0.2);
+}
+
 .kakitori-paper.is-vertical .kakitori-paper-character {
   writing-mode: vertical-rl;
 }
@@ -885,6 +902,7 @@
   z-index: 4;
   border: 1px solid transparent;
   background: transparent;
+  pointer-events: none;
 }
 
 .kakitori-sentence-region.is-revealed:hover {
@@ -1101,6 +1119,138 @@
   font-family: "Klee One", "Yu Kyokasho", "Yu Mincho", serif;
   font-size: 15px;
   line-height: 1.8;
+}
+
+.kakitori-revealed-text.is-selectable,
+.kakitori-card-answer.is-selectable {
+  cursor: text;
+  user-select: text;
+}
+
+.kakitori-sentence-character {
+  white-space: pre-wrap;
+}
+
+.kakitori-selection-popover {
+  position: fixed;
+  z-index: 10000;
+  padding: 5px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 9px;
+  background: var(--background-primary);
+  box-shadow: 0 10px 28px rgba(20, 24, 34, 0.22);
+}
+
+.kakitori-selection-popover button {
+  padding: 7px 11px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+  box-shadow: none;
+  font-size: 12px;
+}
+
+.kakitori-highlight-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.kakitori-highlight-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 4px 5px 4px 9px;
+  border: 1px solid rgba(222, 175, 34, 0.38);
+  border-radius: 999px;
+  background: rgba(255, 211, 82, 0.2);
+  gap: 4px;
+}
+
+.kakitori-highlight-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kakitori-highlight-chip button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  box-shadow: none;
+  background: transparent;
+}
+
+.kakitori-highlight-chip svg {
+  width: 13px;
+  height: 13px;
+}
+
+.kakitori-record-list {
+  display: grid;
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+  gap: 12px;
+}
+
+.kakitori-record-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--kakitori-border);
+  border-radius: 13px;
+  background: var(--kakitori-surface);
+  gap: 12px;
+}
+
+.kakitori-record-header,
+.kakitori-record-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.kakitori-record-header {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.kakitori-record-source {
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  color: var(--kakitori-accent);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kakitori-record-sentence {
+  overflow-wrap: anywhere;
+  font-family: "Klee One", "Yu Kyokasho", "Yu Mincho", serif;
+  font-size: 17px;
+  line-height: 1.9;
+}
+
+.kakitori-record-note {
+  width: 100%;
+  resize: vertical;
+}
+
+.kakitori-record-actions {
+  justify-content: flex-end;
 }
 
 .kakitori-reconceal-button {

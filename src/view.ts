@@ -20,13 +20,14 @@ import type { AzureSpeechConfig } from "./tts";
 import type {
   CardDeckMode,
   KakitoriMaterial,
+  KakitoriSentence,
   WritingDirection
 } from "./types";
 
 export const VIEW_TYPE_KAKITORI = "kakitori-view";
 
-type KakitoriScreen = "library" | "home" | "paper" | "card";
-type NotesTab = "sentence" | "vocabulary" | "article";
+type KakitoriScreen = "library" | "records" | "home" | "paper" | "card";
+type NotesTab = "sentence" | "highlights" | "article";
 
 export class KakitoriView extends ItemView {
   private materials: KakitoriMaterial[] = [];
@@ -44,10 +45,11 @@ export class KakitoriView extends ItemView {
   private notesCollapsed = false;
   private playbackSpeed = 1;
   private floatingControlsEl: HTMLElement | null = null;
+  private selectionPopoverEl: HTMLElement | null = null;
   private paperEl: HTMLElement | null = null;
   private notesPanelEl: HTMLElement | null = null;
   private hideControlsTimer: number | null = null;
-  private saveTimer: number | null = null;
+  private readonly saveTimers = new Map<string, number>();
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -74,18 +76,41 @@ export class KakitoriView extends ItemView {
     this.registerDomEvent(this.contentEl, "keydown", (event) => {
       this.handleKeyboard(event);
     });
+    this.registerDomEvent(document, "mousedown", (event) => {
+      if (
+        this.selectionPopoverEl &&
+        event.target instanceof Node &&
+        !this.selectionPopoverEl.contains(event.target)
+      ) {
+        this.removeSelectionPopover();
+      }
+    });
     await this.refresh();
   }
 
   async onClose(): Promise<void> {
     this.clearHideControlsTimer();
-    if (this.saveTimer !== null) {
-      window.clearTimeout(this.saveTimer);
-      this.saveTimer = null;
+    this.removeSelectionPopover();
+    for (const timer of this.saveTimers.values()) {
+      window.clearTimeout(timer);
     }
-    if (this.activeMaterial) {
-      await this.plugin.saveMaterial(this.activeMaterial);
+    const pendingMaterials = this.materials.filter((material) =>
+      this.saveTimers.has(material.id)
+    );
+    this.saveTimers.clear();
+    if (
+      this.activeMaterial &&
+      !pendingMaterials.some(
+        (material) => material.id === this.activeMaterial?.id
+      )
+    ) {
+      pendingMaterials.push(this.activeMaterial);
     }
+    await Promise.all(
+      pendingMaterials.map(async (material) =>
+        this.plugin.saveMaterial(material)
+      )
+    );
   }
 
   async refresh(): Promise<void> {
@@ -103,6 +128,7 @@ export class KakitoriView extends ItemView {
   }
 
   private render(): void {
+    this.removeSelectionPopover();
     this.contentEl.empty();
     this.floatingControlsEl = null;
     this.paperEl = null;
@@ -112,6 +138,10 @@ export class KakitoriView extends ItemView {
     this.renderTopbar(app);
     const main = app.createDiv({ cls: "kakitori-main" });
 
+    if (this.screen === "records") {
+      this.renderRecords(main);
+      return;
+    }
     if (this.screen === "home" && this.activeMaterial) {
       this.renderArticleHome(main, this.activeMaterial);
       return;
@@ -140,7 +170,9 @@ export class KakitoriView extends ItemView {
     });
 
     const breadcrumbs = topbar.createDiv({ cls: "kakitori-breadcrumbs" });
-    if (this.activeMaterial && this.screen !== "library") {
+    if (this.screen === "records") {
+      breadcrumbs.createSpan({ text: "记录" });
+    } else if (this.activeMaterial && this.screen !== "library") {
       const libraryButton = breadcrumbs.createEl("button", { text: "素材库" });
       libraryButton.addEventListener("click", () => this.openLibrary());
       breadcrumbs.createSpan({ text: "/" });
@@ -159,6 +191,19 @@ export class KakitoriView extends ItemView {
     }
 
     const actions = topbar.createDiv({ cls: "kakitori-topbar-actions" });
+    const recordCount = this.materials.reduce(
+      (count, material) =>
+        count +
+        material.sentences.filter(
+          (sentence) => sentence.highlights.length > 0
+        ).length,
+      0
+    );
+    const recordsButton = actions.createEl("button", {
+      cls: this.screen === "records" ? "is-active" : "",
+      text: recordCount > 0 ? `记录 ${recordCount}` : "记录"
+    });
+    recordsButton.addEventListener("click", () => this.openRecords());
     if (this.screen === "library") {
       const importButton = actions.createEl("button", {
         cls: "mod-cta",
@@ -238,6 +283,90 @@ export class KakitoriView extends ItemView {
     }
   }
 
+  private renderRecords(main: HTMLElement): void {
+    const heading = main.createDiv({ cls: "kakitori-page-heading" });
+    const headingText = heading.createDiv();
+    headingText.createEl("h1", { text: "记录" });
+    headingText.createEl("p", {
+      text: "保存需要留意的句子和其中的书写重点。"
+    });
+
+    const records = this.materials
+      .flatMap((material) =>
+        material.sentences
+          .filter((sentence) => sentence.highlights.length > 0)
+          .map((sentence) => ({ material, sentence }))
+      )
+      .sort((left, right) =>
+        (right.sentence.recordedAt ?? right.material.updatedAt).localeCompare(
+          left.sentence.recordedAt ?? left.material.updatedAt
+        )
+      );
+
+    if (records.length === 0) {
+      const empty = main.createDiv({ cls: "kakitori-empty-state" });
+      const icon = empty.createDiv({ cls: "kakitori-empty-icon" });
+      setIcon(icon, "highlighter");
+      empty.createEl("h2", { text: "还没有记录" });
+      empty.createEl("p", {
+        text: "揭示句子后选中文字，再点击“高亮并记录”。"
+      });
+      return;
+    }
+
+    const list = main.createDiv({ cls: "kakitori-record-list" });
+    for (const { material, sentence } of records) {
+      const card = list.createDiv({ cls: "kakitori-record-card" });
+      const header = card.createDiv({ cls: "kakitori-record-header" });
+      header.createEl("button", {
+        cls: "kakitori-record-source",
+        text: material.title
+      }).addEventListener("click", () => {
+        this.openRecordSentence(material, sentence.id);
+      });
+      header.createSpan({
+        text: `第 ${material.sentences.indexOf(sentence) + 1} 句`
+      });
+
+      this.renderSentenceText(
+        card,
+        sentence,
+        "kakitori-record-sentence",
+        false
+      );
+      this.renderHighlightChips(card, material, sentence);
+
+      const note = card.createEl("textarea", {
+        cls: "kakitori-record-note",
+        attr: {
+          rows: "2",
+          placeholder: "写下这句需要注意的地方（可选）"
+        }
+      });
+      note.value = sentence.note;
+      note.addEventListener("input", () => {
+        sentence.note = note.value;
+        this.scheduleSave(material);
+      });
+
+      const actions = card.createDiv({ cls: "kakitori-record-actions" });
+      const open = actions.createEl("button", { text: "返回原句" });
+      open.addEventListener("click", () => {
+        this.openRecordSentence(material, sentence.id);
+      });
+      const remove = actions.createEl("button", {
+        cls: "mod-warning",
+        text: "删除记录"
+      });
+      remove.addEventListener("click", () => {
+        sentence.highlights = [];
+        sentence.recordedAt = null;
+        void this.plugin.saveMaterial(material);
+        this.render();
+      });
+    }
+  }
+
   private renderArticleHome(
     main: HTMLElement,
     material: KakitoriMaterial
@@ -290,7 +419,7 @@ export class KakitoriView extends ItemView {
     cardIcon.createDiv({ cls: "kakitori-card-mode-glyph" });
     cardMode.createEl("h2", { text: "卡片练习" });
     cardMode.createEl("p", {
-      text: "逐句听写，支持全文顺序、仅难句和随机练习。"
+      text: "逐句听写，支持全文顺序、仅书写易错句和随机练习。"
     });
     const lastCardIndex = material.lastCardSentenceId
       ? material.sentences.findIndex(
@@ -343,7 +472,7 @@ export class KakitoriView extends ItemView {
       void this.prepareArticleAudio(material, prepareAudio);
     });
     progressActions.createSpan({
-      text: "只重置位置与揭示状态，难句和笔记会保留。"
+      text: "只重置位置与揭示状态，书写易错标记和笔记会保留。"
     });
 
     const noteSection = main.createDiv({ cls: "kakitori-article-note" });
@@ -486,13 +615,13 @@ export class KakitoriView extends ItemView {
       empty.createEl("h2", {
         text:
           this.cardDeckMode === "difficult"
-            ? "还没有标记难句"
+            ? "还没有标记书写易错句"
             : "当前卡组没有句子"
       });
       empty.createEl("p", {
         text:
           this.cardDeckMode === "difficult"
-            ? "在右侧“本句”中标记难句后，就能集中练习。"
+            ? "在右侧“本句”中标记书写易错句后，就能集中练习。"
             : "请切换到其他卡组。"
       });
     }
@@ -522,17 +651,24 @@ export class KakitoriView extends ItemView {
       }
     });
     if (this.cardRevealed) {
-      card.createDiv({
-        cls: "kakitori-card-answer",
-        text: sentence.text
-      });
+      this.renderSentenceText(
+        card,
+        sentence,
+        "kakitori-card-answer",
+        true
+      );
     } else {
       const blank = card.createDiv({ cls: "kakitori-card-blank" });
       const icon = blank.createDiv({ cls: "kakitori-card-listen-icon" });
       setIcon(icon, "headphones");
       blank.createEl("p", { text: "播放后听写，双击或按 Enter 揭示" });
     }
-    card.addEventListener("dblclick", () => this.toggleCardReveal());
+    card.addEventListener("dblclick", () => {
+      if (window.getSelection()?.toString()) {
+        return;
+      }
+      this.toggleCardReveal();
+    });
     card.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
@@ -550,17 +686,10 @@ export class KakitoriView extends ItemView {
       cls: "kakitori-card-playback-controls"
     });
     const play = playback.createEl("button", {
-      attr: { "aria-label": "播放", title: "播放" }
+      attr: { "aria-label": "播放／重听", title: "播放／重听" }
     });
     setIcon(play, "play");
     play.addEventListener("click", () => {
-      void this.playSelectedSentence();
-    });
-    const replay = playback.createEl("button", {
-      attr: { "aria-label": "重听", title: "重听" }
-    });
-    setIcon(replay, "rotate-ccw");
-    replay.addEventListener("click", () => {
       void this.playSelectedSentence();
     });
     const regenerate = playback.createEl("button", {
@@ -569,7 +698,7 @@ export class KakitoriView extends ItemView {
         title: "绕过缓存并重新生成音频"
       }
     });
-    setIcon(regenerate, "refresh-cw");
+    setIcon(regenerate, "sparkles");
     regenerate.addEventListener("click", () => {
       void this.playSelectedSentence(true);
     });
@@ -609,13 +738,59 @@ export class KakitoriView extends ItemView {
     this.paperEl = paper;
 
     for (const character of layout.characters) {
+      const sentence = material.sentences.find(
+        (item) => item.id === character.sentenceId
+      );
+      const isRevealed = this.revealedSentenceIds.has(character.sentenceId);
       const cell = paper.createSpan({
-        cls: "kakitori-paper-character",
+        cls: [
+          "kakitori-paper-character",
+          isRevealed ? "is-selectable" : "",
+          sentence &&
+          this.isCharacterHighlighted(
+            sentence,
+            character.sentenceCharacterIndex
+          )
+            ? "is-highlighted"
+            : ""
+        ]
+          .filter(Boolean)
+          .join(" "),
         text: character.character
       });
+      cell.dataset.sentenceId = character.sentenceId;
+      cell.dataset.characterIndex = `${character.sentenceCharacterIndex}`;
       cell.style.gridColumn = `${character.column + 1}`;
       cell.style.gridRow = `${character.row + 1}`;
+      if (isRevealed) {
+        cell.addEventListener("mouseenter", () => {
+          this.clearHideControlsTimer();
+          if (!this.pinnedSentenceId) {
+            this.showFloatingControls(character.sentenceId, material);
+          }
+        });
+        cell.addEventListener("mouseleave", () => {
+          this.scheduleHideControls();
+        });
+        cell.addEventListener("click", (event) => {
+          event.stopPropagation();
+          if (event.detail > 1) {
+            return;
+          }
+          this.selectAndPinSentence(character.sentenceId, material);
+        });
+        cell.addEventListener("dblclick", (event) => {
+          event.stopPropagation();
+          if (window.getSelection()?.toString()) {
+            return;
+          }
+          this.toggleSentenceReveal(character.sentenceId);
+        });
+      }
     }
+    paper.addEventListener("mouseup", (event) => {
+      this.handleTextSelection(event, material);
+    });
 
     for (const segment of layout.masks) {
       const isRevealed = this.revealedSentenceIds.has(segment.sentenceId);
@@ -745,7 +920,7 @@ export class KakitoriView extends ItemView {
     const tabs = panel.createDiv({ cls: "kakitori-notes-tabs" });
     const tabDefinitions: Array<{ id: NotesTab; label: string }> = [
       { id: "sentence", label: "本句" },
-      { id: "vocabulary", label: "生词・短语" },
+      { id: "highlights", label: "高亮记录" },
       { id: "article", label: "全文笔记" }
     ];
     for (const definition of tabDefinitions) {
@@ -760,13 +935,6 @@ export class KakitoriView extends ItemView {
     }
 
     const body = panel.createDiv({ cls: "kakitori-notes-body" });
-    if (this.notesTab === "vocabulary") {
-      body.createEl("p", {
-        cls: "kakitori-muted",
-        text: "选择已揭示原文加入生词的功能将在下一阶段接入。"
-      });
-      return;
-    }
     if (this.notesTab === "article") {
       body.createEl("label", { text: "整篇文章的规律与总结" });
       const textarea = body.createEl("textarea", {
@@ -791,16 +959,37 @@ export class KakitoriView extends ItemView {
       });
       return;
     }
+    if (this.notesTab === "highlights") {
+      if (sentence.highlights.length === 0) {
+        body.createEl("p", {
+          cls: "kakitori-muted",
+          text: "揭示句子后选中文字，再点击“高亮并记录”。"
+        });
+        return;
+      }
+      this.renderSentenceText(
+        body,
+        sentence,
+        "kakitori-revealed-text",
+        false
+      );
+      this.renderHighlightChips(body, material, sentence);
+      const openRecords = body.createEl("button", { text: "打开全部记录" });
+      openRecords.addEventListener("click", () => this.openRecords());
+      return;
+    }
     const isRevealed = this.revealedSentenceIds.has(sentence.id);
     body.createDiv({
       cls: `kakitori-sentence-status ${isRevealed ? "is-revealed" : ""}`,
       text: isRevealed ? "已揭示" : "待核对"
     });
     if (isRevealed) {
-      body.createDiv({
-        cls: "kakitori-revealed-text",
-        text: sentence.text
-      });
+      this.renderSentenceText(
+        body,
+        sentence,
+        "kakitori-revealed-text",
+        true
+      );
       const reconceal = body.createEl("button", {
         cls: "kakitori-reconceal-button",
         text: "重新遮住本句"
@@ -818,7 +1007,7 @@ export class KakitoriView extends ItemView {
       type: "checkbox"
     });
     difficult.checked = sentence.difficult;
-    difficultLabel.createSpan({ text: "标记为难句" });
+    difficultLabel.createSpan({ text: "标记为书写易错句" });
     difficult.addEventListener("change", () => {
       sentence.difficult = difficult.checked;
       this.scheduleSave();
@@ -850,6 +1039,194 @@ export class KakitoriView extends ItemView {
     });
   }
 
+  private renderSentenceText(
+    container: HTMLElement,
+    sentence: KakitoriSentence,
+    className: string,
+    selectable: boolean
+  ): HTMLElement {
+    const text = container.createDiv({ cls: className });
+    text.dataset.sentenceId = sentence.id;
+    for (const [index, character] of Array.from(sentence.text).entries()) {
+      const span = text.createSpan({
+        cls: [
+          "kakitori-sentence-character",
+          this.isCharacterHighlighted(sentence, index)
+            ? "is-highlighted"
+            : ""
+        ]
+          .filter(Boolean)
+          .join(" "),
+        text: character
+      });
+      span.dataset.sentenceId = sentence.id;
+      span.dataset.characterIndex = `${index}`;
+    }
+    if (selectable && this.activeMaterial) {
+      text.addClass("is-selectable");
+      text.addEventListener("mouseup", (event) => {
+        if (this.activeMaterial) {
+          this.handleTextSelection(event, this.activeMaterial);
+        }
+      });
+    }
+    return text;
+  }
+
+  private renderHighlightChips(
+    container: HTMLElement,
+    material: KakitoriMaterial,
+    sentence: KakitoriSentence
+  ): void {
+    const characters = Array.from(sentence.text);
+    const list = container.createDiv({ cls: "kakitori-highlight-list" });
+    for (const highlight of sentence.highlights) {
+      const chip = list.createDiv({ cls: "kakitori-highlight-chip" });
+      chip.createSpan({
+        text: characters.slice(highlight.start, highlight.end).join("")
+      });
+      const remove = chip.createEl("button", {
+        attr: {
+          "aria-label": "取消这段高亮",
+          title: "取消这段高亮"
+        }
+      });
+      setIcon(remove, "x");
+      remove.addEventListener("click", () => {
+        sentence.highlights = sentence.highlights.filter(
+          (candidate) => candidate.id !== highlight.id
+        );
+        if (sentence.highlights.length === 0) {
+          sentence.recordedAt = null;
+        }
+        void this.plugin.saveMaterial(material);
+        this.render();
+      });
+    }
+  }
+
+  private isCharacterHighlighted(
+    sentence: KakitoriSentence,
+    characterIndex: number
+  ): boolean {
+    return sentence.highlights.some(
+      (highlight) =>
+        characterIndex >= highlight.start &&
+        characterIndex < highlight.end
+    );
+  }
+
+  private handleTextSelection(
+    event: MouseEvent,
+    material: KakitoriMaterial
+  ): void {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+      return;
+    }
+    const range = selection.getRangeAt(0);
+    const startElement = this.getSelectionCharacter(range.startContainer);
+    const endElement = this.getSelectionCharacter(range.endContainer);
+    const sentenceId = startElement?.dataset.sentenceId;
+    if (
+      !startElement ||
+      !endElement ||
+      !sentenceId ||
+      endElement.dataset.sentenceId !== sentenceId
+    ) {
+      return;
+    }
+    const sentence = material.sentences.find(
+      (candidate) => candidate.id === sentenceId
+    );
+    if (!sentence || !this.revealedSentenceIds.has(sentenceId)) {
+      return;
+    }
+    const startIndex = Number(startElement.dataset.characterIndex);
+    const endIndex = Number(endElement.dataset.characterIndex);
+    if (!Number.isInteger(startIndex) || !Number.isInteger(endIndex)) {
+      return;
+    }
+    const start = startIndex + (range.startOffset > 0 ? 1 : 0);
+    const end = endIndex + (range.endOffset > 0 ? 1 : 0);
+    if (end <= start || !selection.toString().trim()) {
+      return;
+    }
+    const rect = range.getBoundingClientRect();
+    this.showSelectionPopover(
+      material,
+      sentence,
+      start,
+      end,
+      rect.width > 0
+        ? rect
+        : new DOMRect(event.clientX, event.clientY, 1, 1)
+    );
+  }
+
+  private getSelectionCharacter(node: Node): HTMLElement | null {
+    const element =
+      node instanceof HTMLElement ? node : node.parentElement;
+    return (
+      element?.closest<HTMLElement>(
+        "[data-sentence-id][data-character-index]"
+      ) ?? null
+    );
+  }
+
+  private showSelectionPopover(
+    material: KakitoriMaterial,
+    sentence: KakitoriSentence,
+    start: number,
+    end: number,
+    rect: DOMRect
+  ): void {
+    this.removeSelectionPopover();
+    const popover = document.createElement("div");
+    popover.className = "kakitori-selection-popover";
+    const button = document.createElement("button");
+    button.textContent = "高亮并记录";
+    popover.appendChild(button);
+    document.body.appendChild(popover);
+    this.selectionPopoverEl = popover;
+
+    const left = Math.min(
+      Math.max(8, rect.left),
+      window.innerWidth - popover.offsetWidth - 8
+    );
+    const preferredTop = rect.bottom + 8;
+    const top =
+      preferredTop + popover.offsetHeight <= window.innerHeight - 8
+        ? preferredTop
+        : rect.top - popover.offsetHeight - 8;
+    popover.style.left = `${left}px`;
+    popover.style.top = `${Math.max(8, top)}px`;
+
+    button.addEventListener("click", () => {
+      const alreadyExists = sentence.highlights.some(
+        (highlight) =>
+          highlight.start === start && highlight.end === end
+      );
+      if (!alreadyExists) {
+        sentence.highlights.push({
+          id: crypto.randomUUID(),
+          start,
+          end
+        });
+        sentence.recordedAt ??= new Date().toISOString();
+        void this.plugin.saveMaterial(material);
+      }
+      window.getSelection()?.removeAllRanges();
+      this.removeSelectionPopover();
+      this.render();
+    });
+  }
+
+  private removeSelectionPopover(): void {
+    this.selectionPopoverEl?.remove();
+    this.selectionPopoverEl = null;
+  }
+
   private createDirectionSwitch(
     container: HTMLElement,
     material: KakitoriMaterial
@@ -877,7 +1254,7 @@ export class KakitoriView extends ItemView {
     });
     const modes: Array<{ id: CardDeckMode; label: string }> = [
       { id: "all", label: "全文顺序" },
-      { id: "difficult", label: "仅难句" },
+      { id: "difficult", label: "仅书写易错" },
       { id: "random", label: "随机" }
     ];
     for (const mode of modes) {
@@ -1030,16 +1407,13 @@ export class KakitoriView extends ItemView {
       });
     }
 
-    this.createControlButton(controls, "播放", "play", () => {
-      void this.playSelectedSentence();
-    });
-    this.createControlButton(controls, "重听", "rotate-ccw", () => {
+    this.createControlButton(controls, "播放／重听", "play", () => {
       void this.playSelectedSentence();
     });
     this.createControlButton(
       controls,
       "重新生成音频",
-      "refresh-cw",
+      "sparkles",
       () => {
         void this.playSelectedSentence(true);
       }
@@ -1209,6 +1583,63 @@ export class KakitoriView extends ItemView {
     this.selectedSentenceId = null;
     this.pinnedSentenceId = null;
     this.render();
+  }
+
+  private openRecords(): void {
+    this.plugin.tts.stop();
+    if (this.activeMaterial) {
+      void this.plugin.saveMaterial(this.activeMaterial);
+    }
+    this.screen = "records";
+    this.activeMaterial = null;
+    this.revealedSentenceIds.clear();
+    this.cardSequenceIds = [];
+    this.cardRevealed = false;
+    this.selectedSentenceId = null;
+    this.pinnedSentenceId = null;
+    this.render();
+  }
+
+  private openRecordSentence(
+    material: KakitoriMaterial,
+    sentenceId: string
+  ): void {
+    this.plugin.tts.stop();
+    this.activeMaterial = material;
+    this.currentPage = this.findSentencePage(material, sentenceId);
+    material.lastPaperPage = this.currentPage;
+    this.screen = "paper";
+    this.cardSequenceIds = [];
+    this.cardRevealed = false;
+    this.revealedSentenceIds.clear();
+    this.revealedSentenceIds.add(sentenceId);
+    this.selectedSentenceId = sentenceId;
+    this.pinnedSentenceId = sentenceId;
+    this.notesTab = "highlights";
+    void this.plugin.saveMaterial(material);
+    this.render();
+  }
+
+  private findSentencePage(
+    material: KakitoriMaterial,
+    sentenceId: string
+  ): number {
+    const pageCount = getPaperPageCount(material.sentences);
+    for (let page = 0; page < pageCount; page += 1) {
+      const layout = buildPaperPageLayout(
+        material.sentences,
+        page,
+        material.direction
+      );
+      if (
+        layout.characters.some(
+          (character) => character.sentenceId === sentenceId
+        )
+      ) {
+        return page;
+      }
+    }
+    return 0;
   }
 
   private openArticleHome(): void {
@@ -1385,19 +1816,21 @@ export class KakitoriView extends ItemView {
     };
   }
 
-  private scheduleSave(): void {
-    if (!this.activeMaterial) {
+  private scheduleSave(
+    material: KakitoriMaterial | null = this.activeMaterial
+  ): void {
+    if (!material) {
       return;
     }
-    if (this.saveTimer !== null) {
-      window.clearTimeout(this.saveTimer);
+    const existingTimer = this.saveTimers.get(material.id);
+    if (existingTimer !== undefined) {
+      window.clearTimeout(existingTimer);
     }
-    this.saveTimer = window.setTimeout(() => {
-      this.saveTimer = null;
-      if (this.activeMaterial) {
-        void this.plugin.saveMaterial(this.activeMaterial);
-      }
+    const timer = window.setTimeout(() => {
+      this.saveTimers.delete(material.id);
+      void this.plugin.saveMaterial(material);
     }, 350);
+    this.saveTimers.set(material.id, timer);
   }
 
   private scheduleHideControls(): void {

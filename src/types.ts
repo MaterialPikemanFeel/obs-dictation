@@ -9,12 +9,20 @@ export interface KakitoriSettings {
   azureSpeechKey: string;
 }
 
+export interface KakitoriTextHighlight {
+  id: string;
+  start: number;
+  end: number;
+}
+
 export interface KakitoriSentence {
   id: string;
   text: string;
   startsParagraph: boolean;
   note: string;
   difficult: boolean;
+  highlights: KakitoriTextHighlight[];
+  recordedAt: string | null;
 }
 
 export interface KakitoriMaterial {
