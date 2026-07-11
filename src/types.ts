@@ -8,6 +8,7 @@ export interface KakitoriSettings {
 export interface KakitoriSentence {
   id: string;
   text: string;
+  startsParagraph: boolean;
   note: string;
   difficult: boolean;
 }

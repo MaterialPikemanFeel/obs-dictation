@@ -12,7 +12,10 @@ import {
   getPaperPageCount,
   type PaperPageLayout
 } from "./paper-layout";
-import { countWritingCharacters } from "./segmenter";
+import {
+  countParagraphs,
+  countWritingCharacters
+} from "./segmenter";
 import type {
   KakitoriMaterial,
   WritingDirection
@@ -192,8 +195,12 @@ export class KakitoriView extends ItemView {
       card.createEl("p", {
         cls: "kakitori-card-preview",
         text: material.sentences
-          .slice(0, 2)
-          .map((sentence) => sentence.text)
+          .slice(0, 4)
+          .map((sentence, index) =>
+            index > 0 && sentence.startsParagraph
+              ? `\n${sentence.text}`
+              : sentence.text
+          )
           .join("")
       });
       const meta = card.createDiv({ cls: "kakitori-card-meta" });
@@ -201,6 +208,9 @@ export class KakitoriView extends ItemView {
         text: `${countWritingCharacters(material.sourceText)} 字`
       });
       meta.createSpan({ text: `${material.sentences.length} 句` });
+      meta.createSpan({
+        text: `${countParagraphs(material.sourceText)} 段`
+      });
       const pageCount = getPaperPageCount(material.sentences);
       meta.createSpan({
         text:
@@ -235,6 +245,9 @@ export class KakitoriView extends ItemView {
       text: `${countWritingCharacters(material.sourceText)} 字`
     });
     stats.createSpan({ text: `${material.sentences.length} 句` });
+    stats.createSpan({
+      text: `${countParagraphs(material.sourceText)} 段`
+    });
     stats.createSpan({
       text: `${getPaperPageCount(material.sentences)} 页原稿纸`
     });

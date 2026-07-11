@@ -13,6 +13,8 @@ interface CharacterToken {
   sentenceCharacterCount: number;
 }
 
+type PaperCell = CharacterToken | null;
+
 export interface PlacedCharacter extends CharacterToken {
   column: number;
   row: number;
@@ -37,11 +39,10 @@ export interface PaperPageLayout {
 }
 
 export function getPaperPageCount(sentences: KakitoriSentence[]): number {
-  const characterCount = sentences.reduce(
-    (total, sentence) => total + Array.from(sentence.text).length,
-    0
+  return Math.max(
+    1,
+    Math.ceil(buildPaperCells(sentences).length / CELLS_PER_PAGE)
   );
-  return Math.max(1, Math.ceil(characterCount / CELLS_PER_PAGE));
 }
 
 export function buildPaperPageLayout(
@@ -49,29 +50,31 @@ export function buildPaperPageLayout(
   pageIndex: number,
   direction: WritingDirection
 ): PaperPageLayout {
-  const tokens = flattenSentences(sentences);
-  const pageCount = Math.max(1, Math.ceil(tokens.length / CELLS_PER_PAGE));
+  const cells = buildPaperCells(sentences);
+  const pageCount = Math.max(1, Math.ceil(cells.length / CELLS_PER_PAGE));
   const safePageIndex = Math.min(Math.max(pageIndex, 0), pageCount - 1);
   const pageStart = safePageIndex * CELLS_PER_PAGE;
   const pageEnd = (safePageIndex + 1) * CELLS_PER_PAGE;
-  const pageTokens = tokens.slice(
-    pageStart,
-    pageEnd
-  );
-  const characters = pageTokens.map((token, index) => {
+  const pageCells = cells.slice(pageStart, pageEnd);
+  const characters = pageCells.flatMap((token, index) => {
+    if (!token) {
+      return [];
+    }
     const line = Math.floor(index / CELLS_PER_LINE);
     const offset = index % CELLS_PER_LINE;
-    return direction === "vertical"
-      ? {
-          ...token,
-          column: CELLS_PER_LINE - 1 - line,
-          row: offset
-        }
-      : {
-          ...token,
-          column: offset,
-          row: line
-        };
+    return [
+      direction === "vertical"
+        ? {
+            ...token,
+            column: CELLS_PER_LINE - 1 - line,
+            row: offset
+          }
+        : {
+            ...token,
+            column: offset,
+            row: line
+          }
+    ];
   });
 
   return {
@@ -80,23 +83,36 @@ export function buildPaperPageLayout(
     pageCount,
     continuesFromPrevious:
       pageStart > 0 &&
-      tokens[pageStart - 1]?.sentenceId === tokens[pageStart]?.sentenceId,
+      cells[pageStart - 1]?.sentenceId === cells[pageStart]?.sentenceId,
     continuesOnNext:
-      pageEnd < tokens.length &&
-      tokens[pageEnd - 1]?.sentenceId === tokens[pageEnd]?.sentenceId
+      pageEnd < cells.length &&
+      cells[pageEnd - 1]?.sentenceId === cells[pageEnd]?.sentenceId
   };
 }
 
-function flattenSentences(sentences: KakitoriSentence[]): CharacterToken[] {
-  return sentences.flatMap((sentence) => {
+function buildPaperCells(sentences: KakitoriSentence[]): PaperCell[] {
+  const cells: PaperCell[] = [];
+
+  for (const sentence of sentences) {
+    if (sentence.startsParagraph) {
+      while (cells.length % CELLS_PER_LINE !== 0) {
+        cells.push(null);
+      }
+      cells.push(null);
+    }
+
     const characters = Array.from(sentence.text);
-    return characters.map((character, sentenceCharacterIndex) => ({
-      character,
-      sentenceId: sentence.id,
-      sentenceCharacterIndex,
-      sentenceCharacterCount: characters.length
-    }));
-  });
+    for (const [sentenceCharacterIndex, character] of characters.entries()) {
+      cells.push({
+        character,
+        sentenceId: sentence.id,
+        sentenceCharacterIndex,
+        sentenceCharacterCount: characters.length
+      });
+    }
+  }
+
+  return cells;
 }
 
 function buildMaskSegments(

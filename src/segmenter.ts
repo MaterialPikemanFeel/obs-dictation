@@ -2,16 +2,44 @@ const TERMINATORS = new Set(["。", "！", "？", "!", "?"]);
 const OPENING_MARKS = new Set(["「", "『", "（", "(", "［", "[", "【"]);
 const CLOSING_MARKS = new Set(["」", "』", "）", ")", "］", "]", "】"]);
 
+export interface SegmentedSentence {
+  text: string;
+  startsParagraph: boolean;
+}
+
 export function normalizeWritingText(sourceText: string): string {
   return sourceText.replace(/\s+/g, "");
 }
 
-export function splitJapaneseSentences(sourceText: string): string[] {
-  const text = sourceText.replace(/\r\n?/g, "\n").trim();
-  if (!text) {
-    return [];
-  }
+export function segmentJapaneseText(
+  sourceText: string
+): SegmentedSentence[] {
+  const paragraphs = sourceText
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
 
+  return paragraphs.flatMap((paragraph) =>
+    splitParagraph(paragraph).map((text, index) => ({
+      text,
+      startsParagraph: index === 0
+    }))
+  );
+}
+
+export function splitJapaneseSentences(sourceText: string): string[] {
+  return segmentJapaneseText(sourceText).map((sentence) => sentence.text);
+}
+
+export function countParagraphs(sourceText: string): number {
+  return sourceText
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .filter((paragraph) => paragraph.trim().length > 0).length;
+}
+
+function splitParagraph(text: string): string[] {
   const sentences: string[] = [];
   let buffer = "";
   let nestingDepth = 0;
@@ -28,13 +56,6 @@ export function splitJapaneseSentences(sourceText: string): string[] {
 
   const characters = Array.from(text);
   for (const [index, character] of characters.entries()) {
-    if (character === "\n") {
-      if (nestingDepth === 0 && buffer.trim()) {
-        flush();
-      }
-      continue;
-    }
-
     buffer += character;
 
     if (OPENING_MARKS.has(character)) {

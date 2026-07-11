@@ -149,7 +149,8 @@
 
 .kakitori-library-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
+  width: 100%;
   max-width: 1180px;
   margin: 0 auto;
   gap: 14px;
@@ -158,6 +159,9 @@
 .kakitori-material-card {
   display: flex;
   flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 184px;
   padding: 20px;
   overflow: hidden;
@@ -179,10 +183,15 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  width: 100%;
+  min-width: 0;
   gap: 12px;
 }
 
 .kakitori-card-title-row h2 {
+  display: block;
+  flex: 1 1 auto;
+  width: 0;
   min-width: 0;
   margin: 0;
   overflow: hidden;
@@ -205,12 +214,17 @@
 .kakitori-card-preview {
   display: -webkit-box;
   flex: 1;
+  width: 100%;
+  max-width: 100%;
   margin: 14px 0;
   overflow: hidden;
   color: var(--text-muted);
   font-family: "Klee One", "Yu Kyokasho", "Yu Mincho", serif;
   font-size: 14px;
   line-height: 1.75;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  word-break: break-all;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }

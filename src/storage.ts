@@ -1,6 +1,6 @@
 import { normalizePath } from "obsidian";
 import type { App } from "obsidian";
-import { splitJapaneseSentences } from "./segmenter";
+import { segmentJapaneseText } from "./segmenter";
 import {
   DEFAULT_SETTINGS,
   type ImportedMaterial,
@@ -111,9 +111,10 @@ export class KakitoriStorage {
       title: imported.title.trim() || "未命名素材",
       sourceText: imported.sourceText,
       direction: defaultDirection,
-      sentences: splitJapaneseSentences(imported.sourceText).map((text) => ({
+      sentences: segmentJapaneseText(imported.sourceText).map((sentence) => ({
         id: crypto.randomUUID(),
-        text,
+        text: sentence.text,
+        startsParagraph: sentence.startsParagraph,
         note: "",
         difficult: false
       })),
@@ -172,17 +173,20 @@ export class KakitoriStorage {
       const raw = await this.app.vault.adapter.read(normalizePath(path));
       const materialFile = JSON.parse(raw) as MaterialFile;
       const notebook = await this.readNotebook(materialFile.id);
-      const sentenceTexts = splitJapaneseSentences(materialFile.sourceText);
-      const sentences: KakitoriSentence[] = sentenceTexts.map((text, index) => {
+      const segmentedSentences = segmentJapaneseText(materialFile.sourceText);
+      const sentences: KakitoriSentence[] = segmentedSentences.map(
+        (segmentedSentence, index) => {
         const id = materialFile.sentenceIds[index] ?? crypto.randomUUID();
         const notebookEntry = notebook.sentences[id];
         return {
           id,
-          text,
+          text: segmentedSentence.text,
+          startsParagraph: segmentedSentence.startsParagraph,
           note: notebookEntry?.note ?? "",
           difficult: notebookEntry?.difficult ?? false
         };
-      });
+        }
+      );
 
       return {
         id: materialFile.id,

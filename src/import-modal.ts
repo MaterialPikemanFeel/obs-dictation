@@ -1,6 +1,7 @@
 import { Modal } from "obsidian";
 import type { App } from "obsidian";
 import {
+  countParagraphs,
   countWritingCharacters,
   deriveTitle,
   splitJapaneseSentences
@@ -25,7 +26,7 @@ export class ImportMaterialModal extends Modal {
     this.contentEl.createEl("h2", { text: "导入听写素材" });
     this.contentEl.createEl("p", {
       cls: "kakitori-muted",
-      text: "粘贴日语文本，或拖入 .txt / .md 文件。素材会独立保存到 _Kakitori。"
+      text: "粘贴日语文本，或拖入 .txt / .md 文件。原文换行会保留为新段落。"
     });
 
     const dropZone = this.contentEl.createDiv({
@@ -80,7 +81,7 @@ export class ImportMaterialModal extends Modal {
     const updatePreview = (): void => {
       const sentences = splitJapaneseSentences(this.sourceText);
       previewStats.setText(
-        `${countWritingCharacters(this.sourceText)} 字 · ${sentences.length} 句`
+        `${countWritingCharacters(this.sourceText)} 字 · ${sentences.length} 句 · ${countParagraphs(this.sourceText)} 段`
       );
       previewSentences.empty();
       for (const [index, sentence] of sentences.slice(0, 4).entries()) {
