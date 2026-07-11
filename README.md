@@ -18,8 +18,16 @@ its imported materials separate from ordinary notes and stores its data under
 - Reveal, reconceal, difficult-sentence flags, and notes
 - Data stored in `_Kakitori/Materials` and `_Kakitori/Notebooks`
 
-Azure TTS, card practice, vocabulary collection, and audio cache management are
-planned for later phases.
+## Phase 2
+
+- Card practice with manual reveal and reconceal
+- Full-order, difficult-sentence, and random decks
+- Independent card progress and restart
+- Vertical or horizontal answers following the article direction
+- Shared sentence difficulty flags and notes
+
+Azure TTS, vocabulary collection, and audio cache management remain planned for
+later phases.
 
 ## Development
 

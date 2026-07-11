@@ -539,6 +539,163 @@
   min-width: 0;
 }
 
+.kakitori-card-practice-area {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  min-width: 0;
+  padding: clamp(8px, 2vw, 22px) 0;
+}
+
+.kakitori-practice-card {
+  display: grid;
+  place-items: center;
+  width: min(100%, 760px);
+  min-height: clamp(330px, 54vh, 560px);
+  padding: clamp(28px, 6vw, 72px);
+  border: 1px solid var(--kakitori-border);
+  border-radius: 18px;
+  outline: none;
+  color: var(--text-normal);
+  background:
+    linear-gradient(145deg, var(--kakitori-accent-soft), transparent 54%),
+    var(--kakitori-surface);
+  box-shadow: 0 16px 46px rgba(35, 41, 70, 0.08);
+  cursor: pointer;
+}
+
+.kakitori-practice-card:hover,
+.kakitori-practice-card:focus-visible {
+  border-color: color-mix(in srgb, var(--kakitori-accent) 48%, var(--kakitori-border));
+}
+
+.kakitori-practice-card.is-revealed {
+  background: var(--kakitori-surface);
+}
+
+.kakitori-card-answer {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-family: "Klee One", "Yu Kyokasho", "Yu Mincho", serif;
+  font-size: clamp(24px, 3vw, 38px);
+  line-height: 1.9;
+  text-align: center;
+}
+
+.kakitori-practice-card.is-vertical .kakitori-card-answer {
+  max-height: 390px;
+  writing-mode: vertical-rl;
+  text-align: start;
+}
+
+.kakitori-card-blank {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  color: var(--text-faint);
+  gap: 12px;
+  text-align: center;
+}
+
+.kakitori-card-blank p {
+  margin: 0;
+  font-size: 12px;
+}
+
+.kakitori-card-listen-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  color: var(--kakitori-accent);
+  background: var(--kakitori-accent-soft);
+}
+
+.kakitori-card-listen-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.kakitori-card-controls {
+  display: grid;
+  align-items: center;
+  grid-template-columns: minmax(90px, 1fr) auto minmax(90px, 1fr);
+  width: min(100%, 760px);
+  margin-top: 18px;
+  gap: 14px;
+}
+
+.kakitori-card-controls > button {
+  min-height: 36px;
+  font-size: 11px;
+}
+
+.kakitori-card-controls > button:last-child {
+  justify-self: end;
+}
+
+.kakitori-card-playback-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  border: 1px solid var(--kakitori-border);
+  border-radius: 10px;
+  background: var(--kakitori-surface);
+  box-shadow: 0 8px 22px rgba(35, 41, 70, 0.07);
+  gap: 3px;
+}
+
+.kakitori-card-playback-controls button {
+  display: grid;
+  place-items: center;
+  min-width: 34px;
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 7px;
+  box-shadow: none;
+  background: transparent;
+  font-size: 11px;
+}
+
+.kakitori-card-playback-controls button:hover {
+  color: var(--kakitori-accent);
+  background: var(--kakitori-accent-soft);
+}
+
+.kakitori-card-playback-controls svg {
+  width: 15px;
+  height: 15px;
+}
+
+.kakitori-card-speed {
+  color: var(--text-muted);
+}
+
+.kakitori-card-deck-empty {
+  width: min(100%, 760px);
+  min-height: 330px;
+  padding: 80px 28px;
+  border: 1px dashed var(--kakitori-border);
+  border-radius: 18px;
+  color: var(--text-muted);
+  background: var(--kakitori-surface);
+  text-align: center;
+}
+
+.kakitori-card-deck-empty h2 {
+  margin: 0;
+  color: var(--text-normal);
+  font-size: 18px;
+}
+
+.kakitori-card-deck-empty p {
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+
 .kakitori-paper-shell {
   position: relative;
   width: min(72vh, 100%, 760px);
@@ -1099,6 +1256,32 @@
 
   .kakitori-mode-grid {
     grid-template-columns: 1fr;
+  }
+
+  .kakitori-card-deck-switch {
+    width: 100%;
+  }
+
+  .kakitori-card-deck-switch button {
+    flex: 1;
+  }
+
+  .kakitori-practice-card {
+    min-height: 320px;
+    padding: 24px;
+  }
+
+  .kakitori-card-controls {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .kakitori-card-playback-controls {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .kakitori-card-controls > button:last-child {
+    justify-self: stretch;
   }
 
   .kakitori-paper-shell {

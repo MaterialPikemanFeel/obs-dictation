@@ -1,4 +1,5 @@
 export type WritingDirection = "vertical" | "horizontal";
+export type CardDeckMode = "all" | "difficult" | "random";
 
 export interface KakitoriSettings {
   defaultDirection: WritingDirection;
@@ -23,6 +24,7 @@ export interface KakitoriMaterial {
   createdAt: string;
   updatedAt: string;
   lastPaperPage: number;
+  lastCardSentenceId: string | null;
 }
 
 export interface ImportedMaterial {

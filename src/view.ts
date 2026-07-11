@@ -17,13 +17,14 @@ import {
   countWritingCharacters
 } from "./segmenter";
 import type {
+  CardDeckMode,
   KakitoriMaterial,
   WritingDirection
 } from "./types";
 
 export const VIEW_TYPE_KAKITORI = "kakitori-view";
 
-type KakitoriScreen = "library" | "home" | "paper";
+type KakitoriScreen = "library" | "home" | "paper" | "card";
 type NotesTab = "sentence" | "vocabulary" | "article";
 
 export class KakitoriView extends ItemView {
@@ -31,6 +32,10 @@ export class KakitoriView extends ItemView {
   private activeMaterial: KakitoriMaterial | null = null;
   private screen: KakitoriScreen = "library";
   private currentPage = 0;
+  private cardDeckMode: CardDeckMode = "all";
+  private cardSequenceIds: string[] = [];
+  private currentCardIndex = 0;
+  private cardRevealed = false;
   private readonly revealedSentenceIds = new Set<string>();
   private selectedSentenceId: string | null = null;
   private pinnedSentenceId: string | null = null;
@@ -114,6 +119,10 @@ export class KakitoriView extends ItemView {
       this.renderPaperScreen(main, this.activeMaterial);
       return;
     }
+    if (this.screen === "card" && this.activeMaterial) {
+      this.renderCardScreen(main, this.activeMaterial);
+      return;
+    }
     this.renderLibrary(main);
   }
 
@@ -134,13 +143,15 @@ export class KakitoriView extends ItemView {
       const libraryButton = breadcrumbs.createEl("button", { text: "素材库" });
       libraryButton.addEventListener("click", () => this.openLibrary());
       breadcrumbs.createSpan({ text: "/" });
-      if (this.screen === "paper") {
+      if (this.screen === "paper" || this.screen === "card") {
         const articleButton = breadcrumbs.createEl("button", {
           text: this.activeMaterial.title
         });
         articleButton.addEventListener("click", () => this.openArticleHome());
         breadcrumbs.createSpan({ text: "/" });
-        breadcrumbs.createSpan({ text: "原稿用紙" });
+        breadcrumbs.createSpan({
+          text: this.screen === "paper" ? "原稿用紙" : "卡片练习"
+        });
       } else {
         breadcrumbs.createSpan({ text: this.activeMaterial.title });
       }
@@ -274,17 +285,25 @@ export class KakitoriView extends ItemView {
     const cardMode = modes.createEl("button", {
       cls: "kakitori-mode-card"
     });
-    cardMode.disabled = true;
     const cardIcon = cardMode.createDiv({ cls: "kakitori-mode-icon" });
     cardIcon.createDiv({ cls: "kakitori-card-mode-glyph" });
     cardMode.createEl("h2", { text: "卡片练习" });
     cardMode.createEl("p", {
-      text: "逐句听写模式将在下一阶段接入。"
+      text: "逐句听写，支持全文顺序、仅难句和随机练习。"
     });
+    const lastCardIndex = material.lastCardSentenceId
+      ? material.sentences.findIndex(
+          (sentence) => sentence.id === material.lastCardSentenceId
+        )
+      : -1;
     cardMode.createDiv({
       cls: "kakitori-mode-progress",
-      text: "即将加入"
+      text:
+        lastCardIndex >= 0
+          ? `继续第 ${lastCardIndex + 1} 句`
+          : "从第 1 句开始"
     });
+    cardMode.addEventListener("click", () => this.openCards());
 
     const progressActions = main.createDiv({
       cls: "kakitori-progress-actions"
@@ -300,6 +319,20 @@ export class KakitoriView extends ItemView {
       this.pinnedSentenceId = null;
       void this.plugin.saveMaterial(material);
       this.screen = "paper";
+      this.render();
+    });
+    const restartCards = progressActions.createEl("button", {
+      text: "卡片从头练习"
+    });
+    restartCards.addEventListener("click", () => {
+      material.lastCardSentenceId = null;
+      this.cardDeckMode = "all";
+      this.cardSequenceIds = material.sentences.map((sentence) => sentence.id);
+      this.currentCardIndex = 0;
+      this.cardRevealed = false;
+      this.selectedSentenceId = this.cardSequenceIds[0] ?? null;
+      void this.plugin.saveMaterial(material);
+      this.screen = "card";
       this.render();
     });
     progressActions.createSpan({
@@ -390,6 +423,151 @@ export class KakitoriView extends ItemView {
       cls: "kakitori-notes-panel"
     });
     this.renderNotesPanel(material);
+  }
+
+  private renderCardScreen(
+    main: HTMLElement,
+    material: KakitoriMaterial
+  ): void {
+    if (this.cardSequenceIds.length === 0 && this.cardDeckMode === "all") {
+      this.cardSequenceIds = this.buildCardSequence(material, "all");
+    }
+    this.currentCardIndex = Math.min(
+      Math.max(this.currentCardIndex, 0),
+      Math.max(0, this.cardSequenceIds.length - 1)
+    );
+    const sentenceId = this.cardSequenceIds[this.currentCardIndex] ?? null;
+    const sentence =
+      material.sentences.find((item) => item.id === sentenceId) ?? null;
+    this.selectedSentenceId = sentence?.id ?? null;
+    this.syncCardRevealState(sentence?.id ?? null);
+
+    const header = main.createDiv({ cls: "kakitori-practice-header" });
+    const left = header.createDiv({ cls: "kakitori-practice-title" });
+    const back = left.createEl("button", {
+      cls: "kakitori-icon-button",
+      attr: { "aria-label": "返回文章主页" }
+    });
+    setIcon(back, "arrow-left");
+    back.addEventListener("click", () => this.openArticleHome());
+    const title = left.createDiv();
+    title.createEl("h1", { text: material.title });
+    title.createEl("p", {
+      text:
+        this.cardSequenceIds.length > 0
+          ? this.cardRevealed &&
+            this.currentCardIndex === this.cardSequenceIds.length - 1
+            ? `本轮完成 · 第 ${this.currentCardIndex + 1} / ${this.cardSequenceIds.length} 句`
+            : `第 ${this.currentCardIndex + 1} / ${this.cardSequenceIds.length} 句`
+          : "当前卡组没有句子"
+    });
+
+    const tools = header.createDiv({ cls: "kakitori-practice-tools" });
+    this.createCardDeckSwitch(tools, material);
+    this.createDirectionSwitch(tools, material);
+
+    const workspace = main.createDiv({
+      cls: `kakitori-practice-workspace${
+        this.notesCollapsed ? " is-notes-collapsed" : ""
+      }`
+    });
+    const cardArea = workspace.createDiv({ cls: "kakitori-card-practice-area" });
+    if (sentence) {
+      this.renderPracticeCard(cardArea, material, sentence.id);
+    } else {
+      const empty = cardArea.createDiv({ cls: "kakitori-card-deck-empty" });
+      empty.createEl("h2", {
+        text:
+          this.cardDeckMode === "difficult"
+            ? "还没有标记难句"
+            : "当前卡组没有句子"
+      });
+      empty.createEl("p", {
+        text:
+          this.cardDeckMode === "difficult"
+            ? "在右侧“本句”中标记难句后，就能集中练习。"
+            : "请切换到其他卡组。"
+      });
+    }
+    this.notesPanelEl = workspace.createDiv({
+      cls: "kakitori-notes-panel"
+    });
+    this.renderNotesPanel(material);
+  }
+
+  private renderPracticeCard(
+    cardArea: HTMLElement,
+    material: KakitoriMaterial,
+    sentenceId: string
+  ): void {
+    const sentence = material.sentences.find((item) => item.id === sentenceId);
+    if (!sentence) {
+      return;
+    }
+    const card = cardArea.createDiv({
+      cls: `kakitori-practice-card is-${material.direction}${
+        this.cardRevealed ? " is-revealed" : ""
+      }`,
+      attr: {
+        role: "button",
+        tabindex: "0",
+        "aria-label": this.cardRevealed ? "重新遮住答案" : "揭示答案"
+      }
+    });
+    if (this.cardRevealed) {
+      card.createDiv({
+        cls: "kakitori-card-answer",
+        text: sentence.text
+      });
+    } else {
+      const blank = card.createDiv({ cls: "kakitori-card-blank" });
+      const icon = blank.createDiv({ cls: "kakitori-card-listen-icon" });
+      setIcon(icon, "headphones");
+      blank.createEl("p", { text: "播放后听写，双击或按 Enter 揭示" });
+    }
+    card.addEventListener("dblclick", () => this.toggleCardReveal());
+    card.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        event.stopPropagation();
+        this.toggleCardReveal();
+      }
+    });
+
+    const controls = cardArea.createDiv({ cls: "kakitori-card-controls" });
+    const previous = controls.createEl("button", { text: "← 上一句" });
+    previous.disabled = this.currentCardIndex === 0;
+    previous.addEventListener("click", () => this.changeCard(-1, material));
+
+    const playback = controls.createDiv({
+      cls: "kakitori-card-playback-controls"
+    });
+    const play = playback.createEl("button", {
+      attr: { "aria-label": "播放", title: "播放" }
+    });
+    setIcon(play, "play");
+    play.addEventListener("click", () => this.showTtsNotice());
+    const replay = playback.createEl("button", {
+      attr: { "aria-label": "重听", title: "重听" }
+    });
+    setIcon(replay, "rotate-ccw");
+    replay.addEventListener("click", () => this.showTtsNotice());
+    const speed = playback.createEl("button", {
+      cls: "kakitori-card-speed",
+      text: `${this.playbackSpeed}x`
+    });
+    speed.addEventListener("click", () => {
+      this.playbackSpeed = this.nextPlaybackSpeed();
+      speed.setText(`${this.playbackSpeed}x`);
+    });
+    const reveal = playback.createEl("button", {
+      text: this.cardRevealed ? "重新遮住" : "揭示"
+    });
+    reveal.addEventListener("click", () => this.toggleCardReveal());
+
+    const next = controls.createEl("button", { text: "下一句 →" });
+    next.disabled = this.currentCardIndex >= this.cardSequenceIds.length - 1;
+    next.addEventListener("click", () => this.changeCard(1, material));
   }
 
   private renderPaper(
@@ -623,6 +801,20 @@ export class KakitoriView extends ItemView {
     difficult.addEventListener("change", () => {
       sentence.difficult = difficult.checked;
       this.scheduleSave();
+      if (this.screen === "card" && this.cardDeckMode === "difficult") {
+        this.cardSequenceIds = this.buildCardSequence(material, "difficult");
+        this.currentCardIndex = Math.min(
+          this.currentCardIndex,
+          Math.max(0, this.cardSequenceIds.length - 1)
+        );
+        this.cardRevealed = false;
+        this.selectedSentenceId =
+          this.cardSequenceIds[this.currentCardIndex] ?? null;
+        if (this.selectedSentenceId) {
+          material.lastCardSentenceId = this.selectedSentenceId;
+        }
+        this.render();
+      }
     });
 
     body.createEl("label", { text: "本句速记" });
@@ -653,6 +845,108 @@ export class KakitoriView extends ItemView {
         void this.setDirection(material, direction);
       });
     }
+  }
+
+  private createCardDeckSwitch(
+    container: HTMLElement,
+    material: KakitoriMaterial
+  ): void {
+    const group = container.createDiv({
+      cls: "kakitori-segmented-control kakitori-card-deck-switch"
+    });
+    const modes: Array<{ id: CardDeckMode; label: string }> = [
+      { id: "all", label: "全文顺序" },
+      { id: "difficult", label: "仅难句" },
+      { id: "random", label: "随机" }
+    ];
+    for (const mode of modes) {
+      const button = group.createEl("button", {
+        cls: this.cardDeckMode === mode.id ? "is-active" : "",
+        text: mode.label
+      });
+      button.addEventListener("click", () => {
+        this.setCardDeckMode(material, mode.id);
+      });
+    }
+  }
+
+  private setCardDeckMode(
+    material: KakitoriMaterial,
+    mode: CardDeckMode
+  ): void {
+    this.cardDeckMode = mode;
+    this.cardSequenceIds = this.buildCardSequence(material, mode);
+    this.currentCardIndex = 0;
+    this.cardRevealed = false;
+    this.selectedSentenceId = this.cardSequenceIds[0] ?? null;
+    if (this.selectedSentenceId) {
+      material.lastCardSentenceId = this.selectedSentenceId;
+    }
+    this.revealedSentenceIds.clear();
+    void this.plugin.saveMaterial(material);
+    this.render();
+  }
+
+  private buildCardSequence(
+    material: KakitoriMaterial,
+    mode: CardDeckMode
+  ): string[] {
+    const sentenceIds = material.sentences
+      .filter((sentence) => mode !== "difficult" || sentence.difficult)
+      .map((sentence) => sentence.id);
+    if (mode !== "random") {
+      return sentenceIds;
+    }
+    for (let index = sentenceIds.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.floor(Math.random() * (index + 1));
+      [sentenceIds[index], sentenceIds[swapIndex]] = [
+        sentenceIds[swapIndex],
+        sentenceIds[index]
+      ];
+    }
+    return sentenceIds;
+  }
+
+  private changeCard(delta: number, material: KakitoriMaterial): void {
+    const nextIndex = Math.min(
+      Math.max(this.currentCardIndex + delta, 0),
+      Math.max(0, this.cardSequenceIds.length - 1)
+    );
+    if (nextIndex === this.currentCardIndex) {
+      return;
+    }
+    this.currentCardIndex = nextIndex;
+    this.cardRevealed = false;
+    this.selectedSentenceId = this.cardSequenceIds[nextIndex] ?? null;
+    material.lastCardSentenceId = this.selectedSentenceId;
+    this.revealedSentenceIds.clear();
+    void this.plugin.saveMaterial(material);
+    this.render();
+  }
+
+  private toggleCardReveal(): void {
+    const sentenceId = this.cardSequenceIds[this.currentCardIndex];
+    if (!sentenceId) {
+      return;
+    }
+    this.cardRevealed = !this.cardRevealed;
+    this.syncCardRevealState(sentenceId);
+    this.render();
+  }
+
+  private syncCardRevealState(sentenceId: string | null): void {
+    this.revealedSentenceIds.clear();
+    if (sentenceId && this.cardRevealed) {
+      this.revealedSentenceIds.add(sentenceId);
+    }
+  }
+
+  private nextPlaybackSpeed(): number {
+    return this.playbackSpeed === 1
+      ? 0.75
+      : this.playbackSpeed === 0.75
+        ? 1.25
+        : 1;
   }
 
   private async setDirection(
@@ -726,12 +1020,7 @@ export class KakitoriView extends ItemView {
     });
     speed.addEventListener("click", (event) => {
       event.stopPropagation();
-      this.playbackSpeed =
-        this.playbackSpeed === 1
-          ? 0.75
-          : this.playbackSpeed === 0.75
-            ? 1.25
-            : 1;
+      this.playbackSpeed = this.nextPlaybackSpeed();
       speed.setText(`${this.playbackSpeed}×`);
     });
     this.createControlButton(
@@ -883,6 +1172,8 @@ export class KakitoriView extends ItemView {
     this.screen = "library";
     this.activeMaterial = null;
     this.revealedSentenceIds.clear();
+    this.cardSequenceIds = [];
+    this.cardRevealed = false;
     this.selectedSentenceId = null;
     this.pinnedSentenceId = null;
     this.render();
@@ -891,6 +1182,8 @@ export class KakitoriView extends ItemView {
   private openArticleHome(): void {
     this.screen = "home";
     this.revealedSentenceIds.clear();
+    this.cardSequenceIds = [];
+    this.cardRevealed = false;
     this.selectedSentenceId = null;
     this.pinnedSentenceId = null;
     this.render();
@@ -912,18 +1205,62 @@ export class KakitoriView extends ItemView {
     this.render();
   }
 
+  private openCards(): void {
+    const material = this.activeMaterial;
+    if (!material) {
+      return;
+    }
+    this.cardDeckMode = "all";
+    this.cardSequenceIds = this.buildCardSequence(material, "all");
+    const savedIndex = material.lastCardSentenceId
+      ? this.cardSequenceIds.indexOf(material.lastCardSentenceId)
+      : -1;
+    this.currentCardIndex = savedIndex >= 0 ? savedIndex : 0;
+    this.cardRevealed = false;
+    this.revealedSentenceIds.clear();
+    this.selectedSentenceId =
+      this.cardSequenceIds[this.currentCardIndex] ?? null;
+    this.pinnedSentenceId = null;
+    this.screen = "card";
+    this.render();
+  }
+
   private handleKeyboard(event: KeyboardEvent): void {
     if (
       event.target instanceof HTMLInputElement ||
       event.target instanceof HTMLTextAreaElement ||
-      event.target instanceof HTMLSelectElement
+      event.target instanceof HTMLSelectElement ||
+      event.target instanceof HTMLButtonElement
     ) {
       return;
     }
-    if (this.screen !== "paper" || !this.activeMaterial) {
+    if (!this.activeMaterial) {
       return;
     }
 
+    if (this.screen === "card") {
+      if (event.key === " ") {
+        event.preventDefault();
+        this.showTtsNotice();
+      } else if (event.key.toLowerCase() === "r") {
+        event.preventDefault();
+        this.showTtsNotice();
+      } else if (event.key === "Enter") {
+        event.preventDefault();
+        this.toggleCardReveal();
+      } else if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        this.changeCard(-1, this.activeMaterial);
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        this.changeCard(1, this.activeMaterial);
+      }
+      return;
+    }
+
+    if (this.screen !== "paper") {
+      return;
+    }
     if (event.key === " ") {
       event.preventDefault();
       this.showTtsNotice();

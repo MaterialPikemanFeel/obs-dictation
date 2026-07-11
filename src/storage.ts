@@ -27,6 +27,7 @@ interface MaterialFile {
   createdAt: string;
   updatedAt: string;
   lastPaperPage: number;
+  lastCardSentenceId?: string | null;
 }
 
 interface SentenceNotebookEntry {
@@ -121,7 +122,8 @@ export class KakitoriStorage {
       fullNote: "",
       createdAt: now,
       updatedAt: now,
-      lastPaperPage: 0
+      lastPaperPage: 0,
+      lastCardSentenceId: null
     };
     await this.saveMaterial(material);
     return material;
@@ -139,7 +141,8 @@ export class KakitoriStorage {
       sentenceIds: material.sentences.map((sentence) => sentence.id),
       createdAt: material.createdAt,
       updatedAt: material.updatedAt,
-      lastPaperPage: material.lastPaperPage
+      lastPaperPage: material.lastPaperPage,
+      lastCardSentenceId: material.lastCardSentenceId
     };
     const notebookFile: NotebookFile = {
       version: 1,
@@ -198,7 +201,14 @@ export class KakitoriStorage {
         fullNote: notebook.fullNote,
         createdAt: materialFile.createdAt,
         updatedAt: materialFile.updatedAt,
-        lastPaperPage: Math.max(0, materialFile.lastPaperPage)
+        lastPaperPage: Math.max(0, materialFile.lastPaperPage),
+        lastCardSentenceId:
+          materialFile.lastCardSentenceId &&
+          sentences.some(
+            (sentence) => sentence.id === materialFile.lastCardSentenceId
+          )
+            ? materialFile.lastCardSentenceId
+            : null
       };
     } catch {
       return null;
