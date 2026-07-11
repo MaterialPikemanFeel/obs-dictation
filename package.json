@@ -1,0 +1,30 @@
+{
+  "name": "obsidian-kakitori",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A focused Japanese dictation workspace for Obsidian.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "node esbuild.config.mjs production",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "keywords": [
+    "obsidian",
+    "japanese",
+    "dictation"
+  ],
+  "author": "MaterialPikemanFeel",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@eslint/js": "9.39.1",
+    "@types/node": "20.19.42",
+    "esbuild": "0.25.11",
+    "eslint": "9.39.1",
+    "globals": "16.4.0",
+    "obsidian": "1.13.1",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.46.1"
+  }
+}
