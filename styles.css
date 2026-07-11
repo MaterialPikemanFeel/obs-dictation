@@ -633,12 +633,17 @@
 }
 
 .kakitori-card-controls > button {
+  width: 112px;
   min-height: 36px;
   font-size: 11px;
 }
 
-.kakitori-card-controls > button:last-child {
+.kakitori-card-controls > button:first-child {
   justify-self: end;
+}
+
+.kakitori-card-controls > button:last-child {
+  justify-self: start;
 }
 
 .kakitori-card-playback-controls {
@@ -1432,6 +1437,11 @@
   }
 
   .kakitori-card-controls > button:last-child {
+    justify-self: stretch;
+  }
+
+  .kakitori-card-controls > button {
+    width: auto;
     justify-self: stretch;
   }
 
