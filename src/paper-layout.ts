@@ -9,6 +9,8 @@ const CELLS_PER_PAGE = CELLS_PER_LINE * CELLS_PER_LINE;
 interface CharacterToken {
   character: string;
   sentenceId: string;
+  sentenceCharacterIndex: number;
+  sentenceCharacterCount: number;
 }
 
 export interface PlacedCharacter extends CharacterToken {
@@ -22,6 +24,8 @@ export interface MaskSegment {
   topPercent: number;
   widthPercent: number;
   heightPercent: number;
+  isSentenceStart: boolean;
+  isSentenceEnd: boolean;
 }
 
 export interface PaperPageLayout {
@@ -84,12 +88,15 @@ export function buildPaperPageLayout(
 }
 
 function flattenSentences(sentences: KakitoriSentence[]): CharacterToken[] {
-  return sentences.flatMap((sentence) =>
-    Array.from(sentence.text).map((character) => ({
+  return sentences.flatMap((sentence) => {
+    const characters = Array.from(sentence.text);
+    return characters.map((character, sentenceCharacterIndex) => ({
       character,
-      sentenceId: sentence.id
-    }))
-  );
+      sentenceId: sentence.id,
+      sentenceCharacterIndex,
+      sentenceCharacterCount: characters.length
+    }));
+  });
 }
 
 function buildMaskSegments(
@@ -122,7 +129,15 @@ function buildMaskSegments(
         leftPercent: first.column * 5,
         topPercent: firstRow * 5,
         widthPercent: 5,
-        heightPercent: (lastRow - firstRow + 1) * 5
+        heightPercent: (lastRow - firstRow + 1) * 5,
+        isSentenceStart: group.some(
+          (character) => character.sentenceCharacterIndex === 0
+        ),
+        isSentenceEnd: group.some(
+          (character) =>
+            character.sentenceCharacterIndex ===
+            character.sentenceCharacterCount - 1
+        )
       };
     }
 
@@ -134,7 +149,15 @@ function buildMaskSegments(
       leftPercent: firstColumn * 5,
       topPercent: first.row * 5,
       widthPercent: (lastColumn - firstColumn + 1) * 5,
-      heightPercent: 5
+      heightPercent: 5,
+      isSentenceStart: group.some(
+        (character) => character.sentenceCharacterIndex === 0
+      ),
+      isSentenceEnd: group.some(
+        (character) =>
+          character.sentenceCharacterIndex ===
+          character.sentenceCharacterCount - 1
+      )
     };
   });
 }

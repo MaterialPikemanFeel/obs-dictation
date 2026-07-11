@@ -563,26 +563,97 @@
   writing-mode: vertical-rl;
 }
 
-.kakitori-mask {
+.kakitori-sentence-region {
   position: absolute;
   z-index: 5;
   min-width: 0;
   min-height: 0;
-  border: 1px solid rgba(151, 157, 166, 0.28);
   border-radius: 2px;
+  cursor: pointer;
+}
+
+.kakitori-mask {
+  --mask-edge: #d7dbe1;
+  --mask-center: #fafafa;
+  border: 1px solid rgba(124, 132, 143, 0.48);
   background:
     linear-gradient(
       90deg,
-      rgba(230, 232, 235, 0.7),
-      rgba(251, 251, 250, 1) 17%,
-      rgba(251, 251, 250, 1) 83%,
-      rgba(230, 232, 235, 0.62)
-    ),
-    #fafafa;
+      var(--mask-edge),
+      var(--mask-center) 18%,
+      var(--mask-center) 82%,
+      var(--mask-edge)
+    );
   box-shadow:
-    0 2px 4px rgba(45, 50, 60, 0.07),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.8);
-  cursor: pointer;
+    0 2px 4px rgba(45, 50, 60, 0.09),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.72);
+}
+
+.kakitori-mask.is-tone-1 {
+  --mask-edge: #dce0e7;
+  --mask-center: #f4f6f8;
+}
+
+.kakitori-mask.is-tone-2 {
+  --mask-edge: #deddd8;
+  --mask-center: #faf9f5;
+}
+
+.kakitori-mask.is-tone-3 {
+  --mask-edge: #d6dfdc;
+  --mask-center: #f4f8f6;
+}
+
+.kakitori-paper.is-vertical
+  .kakitori-mask.is-sentence-start::before,
+.kakitori-paper.is-horizontal
+  .kakitori-mask.is-sentence-start::before {
+  position: absolute;
+  z-index: 2;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(91, 99, 111, 0.7);
+  content: "";
+}
+
+.kakitori-paper.is-vertical
+  .kakitori-mask.is-sentence-start::before {
+  top: 3px;
+  right: 3px;
+}
+
+.kakitori-paper.is-horizontal
+  .kakitori-mask.is-sentence-start::before {
+  top: 3px;
+  left: 3px;
+}
+
+.kakitori-paper.is-vertical
+  .kakitori-mask.is-sentence-end::after,
+.kakitori-paper.is-horizontal
+  .kakitori-mask.is-sentence-end::after {
+  position: absolute;
+  z-index: 2;
+  border-radius: 2px;
+  background: rgba(91, 99, 111, 0.58);
+  content: "";
+}
+
+.kakitori-paper.is-vertical
+  .kakitori-mask.is-sentence-end::after {
+  bottom: 3px;
+  left: 3px;
+  width: 8px;
+  height: 2px;
+}
+
+.kakitori-paper.is-horizontal
+  .kakitori-mask.is-sentence-end::after {
+  right: 3px;
+  bottom: 3px;
+  width: 2px;
+  height: 8px;
 }
 
 .kakitori-mask:hover {
@@ -611,7 +682,30 @@
     0 4px 9px rgba(55, 62, 103, 0.09);
 }
 
-.kakitori-mask:focus-visible {
+.kakitori-sentence-region.is-revealed {
+  z-index: 4;
+  border: 1px solid transparent;
+  background: transparent;
+}
+
+.kakitori-sentence-region.is-revealed:hover {
+  z-index: 6;
+  border-color: rgba(89, 103, 216, 0.42);
+  background: rgba(89, 103, 216, 0.045);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.46);
+}
+
+.kakitori-sentence-region.is-revealed.is-selected,
+.kakitori-sentence-region.is-revealed.is-pinned {
+  z-index: 7;
+  border: 1.5px solid rgba(89, 103, 216, 0.84);
+  background: rgba(89, 103, 216, 0.075);
+  box-shadow:
+    0 0 0 3px rgba(89, 103, 216, 0.07),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.42);
+}
+
+.kakitori-sentence-region:focus-visible {
   outline: 2px solid var(--kakitori-accent);
   outline-offset: 2px;
 }
@@ -630,8 +724,8 @@
   writing-mode: horizontal-tb;
 }
 
-.kakitori-mask:hover .kakitori-mask-number,
-.kakitori-mask.is-pinned .kakitori-mask-number {
+.kakitori-sentence-region:hover .kakitori-mask-number,
+.kakitori-sentence-region.is-pinned .kakitori-mask-number {
   display: block;
 }
 
@@ -808,11 +902,6 @@
   font-family: "Klee One", "Yu Kyokasho", "Yu Mincho", serif;
   font-size: 15px;
   line-height: 1.8;
-}
-
-.kakitori-revealed-text.is-vertical {
-  min-height: 140px;
-  writing-mode: vertical-rl;
 }
 
 .kakitori-reconceal-button {

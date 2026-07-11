@@ -405,60 +405,74 @@ export class KakitoriView extends ItemView {
       cell.style.gridRow = `${character.row + 1}`;
     }
 
-    for (const mask of layout.masks) {
-      if (this.revealedSentenceIds.has(mask.sentenceId)) {
-        continue;
-      }
-      const maskEl = paper.createDiv({ cls: "kakitori-mask" });
-      maskEl.dataset.sentenceId = mask.sentenceId;
-      maskEl.setAttribute("role", "button");
-      maskEl.setAttribute("tabindex", "0");
-      maskEl.setAttribute("aria-label", "遮住的听写句子");
-      maskEl.style.left = `${mask.leftPercent}%`;
-      maskEl.style.top = `${mask.topPercent}%`;
-      maskEl.style.width = `${mask.widthPercent}%`;
-      maskEl.style.height = `${mask.heightPercent}%`;
+    for (const segment of layout.masks) {
+      const isRevealed = this.revealedSentenceIds.has(segment.sentenceId);
+      const sentenceIndex = material.sentences.findIndex(
+        (sentence) => sentence.id === segment.sentenceId
+      );
+      const region = paper.createDiv({
+        cls: [
+          "kakitori-sentence-region",
+          isRevealed ? "is-revealed" : "kakitori-mask",
+          `is-tone-${Math.max(0, sentenceIndex) % 4}`,
+          segment.isSentenceStart ? "is-sentence-start" : "",
+          segment.isSentenceEnd ? "is-sentence-end" : ""
+        ]
+          .filter(Boolean)
+          .join(" ")
+      });
+      region.dataset.sentenceId = segment.sentenceId;
+      region.setAttribute("role", "button");
+      region.setAttribute("tabindex", "0");
+      region.setAttribute(
+        "aria-label",
+        isRevealed ? "已揭示的听写句子" : "遮住的听写句子"
+      );
+      region.style.left = `${segment.leftPercent}%`;
+      region.style.top = `${segment.topPercent}%`;
+      region.style.width = `${segment.widthPercent}%`;
+      region.style.height = `${segment.heightPercent}%`;
 
       if (this.plugin.kakitoriSettings.showSentenceNumbersOnHover) {
-        const sentenceIndex = material.sentences.findIndex(
-          (sentence) => sentence.id === mask.sentenceId
-        );
-        maskEl.createSpan({
+        region.createSpan({
           cls: "kakitori-mask-number",
           text: `${sentenceIndex + 1}`
         });
       }
 
-      maskEl.addEventListener("mouseenter", () => {
+      region.addEventListener("mouseenter", () => {
         this.clearHideControlsTimer();
         if (!this.pinnedSentenceId) {
-          this.showFloatingControls(mask.sentenceId, material);
+          this.showFloatingControls(segment.sentenceId, material);
         }
       });
-      maskEl.addEventListener("mouseleave", () => {
+      region.addEventListener("mouseleave", () => {
         this.scheduleHideControls();
       });
-      maskEl.addEventListener("click", (event) => {
+      region.addEventListener("click", (event) => {
         event.stopPropagation();
-        this.selectAndPinSentence(mask.sentenceId, material);
+        if (event.detail > 1) {
+          return;
+        }
+        this.selectAndPinSentence(segment.sentenceId, material);
       });
-      maskEl.addEventListener("dblclick", (event) => {
+      region.addEventListener("dblclick", (event) => {
         event.stopPropagation();
-        this.revealSentence(mask.sentenceId);
+        this.toggleSentenceReveal(segment.sentenceId);
       });
-      maskEl.addEventListener("keydown", (event) => {
+      region.addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
           event.preventDefault();
-          this.revealSentence(mask.sentenceId);
+          this.toggleSentenceReveal(segment.sentenceId);
         }
         if (event.key === " ") {
           event.preventDefault();
-          this.selectAndPinSentence(mask.sentenceId, material);
+          this.selectAndPinSentence(segment.sentenceId, material);
         }
       });
     }
 
-    this.updateMaskClasses();
+    this.updateSentenceRegionClasses();
     paper.addEventListener("mouseleave", () => this.scheduleHideControls());
     if (this.pinnedSentenceId) {
       this.showFloatingControls(this.pinnedSentenceId, material);
@@ -572,7 +586,7 @@ export class KakitoriView extends ItemView {
     });
     if (isRevealed) {
       body.createDiv({
-        cls: `kakitori-revealed-text is-${material.direction}`,
+        cls: "kakitori-revealed-text",
         text: sentence.text
       });
       const reconceal = body.createEl("button", {
@@ -644,7 +658,7 @@ export class KakitoriView extends ItemView {
     this.selectedSentenceId = sentenceId;
     this.pinnedSentenceId =
       this.pinnedSentenceId === sentenceId ? null : sentenceId;
-    this.updateMaskClasses();
+    this.updateSentenceRegionClasses();
     this.renderNotesPanel(material);
     if (this.pinnedSentenceId) {
       this.showFloatingControls(sentenceId, material);
@@ -658,9 +672,10 @@ export class KakitoriView extends ItemView {
     material: KakitoriMaterial
   ): void {
     const paper = this.paperEl;
-    if (!paper || this.revealedSentenceIds.has(sentenceId)) {
+    if (!paper) {
       return;
     }
+    const isRevealed = this.revealedSentenceIds.has(sentenceId);
     this.clearHideControlsTimer();
     this.removeFloatingControls();
 
@@ -706,9 +721,14 @@ export class KakitoriView extends ItemView {
             : 1;
       speed.setText(`${this.playbackSpeed}×`);
     });
-    this.createControlButton(controls, "揭示", "eye", () => {
-      this.revealSentence(sentenceId);
-    });
+    this.createControlButton(
+      controls,
+      isRevealed ? "重新遮住" : "揭示",
+      isRevealed ? "eye-off" : "eye",
+      () => {
+        this.toggleSentenceReveal(sentenceId);
+      }
+    );
     this.createControlButton(
       controls,
       this.pinnedSentenceId === sentenceId ? "取消固定" : "固定",
@@ -748,21 +768,23 @@ export class KakitoriView extends ItemView {
     if (!paper || !controls.isConnected) {
       return;
     }
-    const masks = Array.from(
-      paper.querySelectorAll<HTMLElement>(".kakitori-mask")
-    ).filter((mask) => mask.dataset.sentenceId === sentenceId);
-    if (masks.length === 0) {
+    const regions = Array.from(
+      paper.querySelectorAll<HTMLElement>(".kakitori-sentence-region")
+    ).filter((region) => region.dataset.sentenceId === sentenceId);
+    if (regions.length === 0) {
       return;
     }
 
     const paperRect = paper.getBoundingClientRect();
-    const maskRects = masks.map((mask) => mask.getBoundingClientRect());
-    const left = Math.min(...maskRects.map((rect) => rect.left)) - paperRect.left;
+    const regionRects = regions.map((region) => region.getBoundingClientRect());
+    const left =
+      Math.min(...regionRects.map((rect) => rect.left)) - paperRect.left;
     const right =
-      Math.max(...maskRects.map((rect) => rect.right)) - paperRect.left;
-    const top = Math.min(...maskRects.map((rect) => rect.top)) - paperRect.top;
+      Math.max(...regionRects.map((rect) => rect.right)) - paperRect.left;
+    const top =
+      Math.min(...regionRects.map((rect) => rect.top)) - paperRect.top;
     const bottom =
-      Math.max(...maskRects.map((rect) => rect.bottom)) - paperRect.top;
+      Math.max(...regionRects.map((rect) => rect.bottom)) - paperRect.top;
     const controlsWidth = controls.offsetWidth;
     const controlsHeight = controls.offsetHeight;
 
@@ -790,26 +812,33 @@ export class KakitoriView extends ItemView {
     controls.style.top = `${Math.max(8, y)}px`;
   }
 
-  private updateMaskClasses(): void {
+  private updateSentenceRegionClasses(): void {
     if (!this.paperEl) {
       return;
     }
-    for (const mask of Array.from(
-      this.paperEl.querySelectorAll<HTMLElement>(".kakitori-mask")
+    for (const region of Array.from(
+      this.paperEl.querySelectorAll<HTMLElement>(
+        ".kakitori-sentence-region"
+      )
     )) {
-      const sentenceId = mask.dataset.sentenceId;
-      mask.classList.toggle(
+      const sentenceId = region.dataset.sentenceId;
+      region.classList.toggle(
         "is-selected",
         sentenceId === this.selectedSentenceId
       );
-      mask.classList.toggle("is-pinned", sentenceId === this.pinnedSentenceId);
+      region.classList.toggle(
+        "is-pinned",
+        sentenceId === this.pinnedSentenceId
+      );
     }
   }
 
-  private revealSentence(sentenceId: string): void {
-    this.revealedSentenceIds.add(sentenceId);
-    if (this.pinnedSentenceId === sentenceId) {
-      this.pinnedSentenceId = null;
+  private toggleSentenceReveal(sentenceId: string): void {
+    this.selectedSentenceId = sentenceId;
+    if (this.revealedSentenceIds.has(sentenceId)) {
+      this.revealedSentenceIds.delete(sentenceId);
+    } else {
+      this.revealedSentenceIds.add(sentenceId);
     }
     this.render();
   }
@@ -890,7 +919,7 @@ export class KakitoriView extends ItemView {
       this.showTtsNotice();
     } else if (event.key === "Enter" && this.selectedSentenceId) {
       event.preventDefault();
-      this.revealSentence(this.selectedSentenceId);
+      this.toggleSentenceReveal(this.selectedSentenceId);
     } else if (event.key === "ArrowLeft") {
       event.preventDefault();
       this.changePage(-1, this.activeMaterial);
