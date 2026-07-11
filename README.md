@@ -27,6 +27,7 @@ its imported materials separate from ordinary notes and stores its data under
 - Shared sentence difficulty flags and notes
 - Azure Speech playback with live ja-JP voice discovery
 - Per-sentence MP3 caching under `_Kakitori/Cache`
+- In-place audio regeneration from paper and card controls
 
 Vocabulary collection and audio cache limits/cleanup remain planned for later
 phases.

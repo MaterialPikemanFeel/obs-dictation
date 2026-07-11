@@ -563,6 +563,16 @@ export class KakitoriView extends ItemView {
     replay.addEventListener("click", () => {
       void this.playSelectedSentence();
     });
+    const regenerate = playback.createEl("button", {
+      attr: {
+        "aria-label": "重新生成音频",
+        title: "绕过缓存并重新生成音频"
+      }
+    });
+    setIcon(regenerate, "refresh-cw");
+    regenerate.addEventListener("click", () => {
+      void this.playSelectedSentence(true);
+    });
     const speed = playback.createEl("button", {
       cls: "kakitori-card-speed",
       text: `${this.playbackSpeed}x`
@@ -1026,6 +1036,14 @@ export class KakitoriView extends ItemView {
     this.createControlButton(controls, "重听", "rotate-ccw", () => {
       void this.playSelectedSentence();
     });
+    this.createControlButton(
+      controls,
+      "重新生成音频",
+      "refresh-cw",
+      () => {
+        void this.playSelectedSentence(true);
+      }
+    );
     const speed = controls.createEl("button", {
       attr: { "aria-label": "语速" },
       text: `${this.playbackSpeed}×`
@@ -1296,7 +1314,9 @@ export class KakitoriView extends ItemView {
     }
   }
 
-  private async playSelectedSentence(): Promise<void> {
+  private async playSelectedSentence(
+    forceRegenerate = false
+  ): Promise<void> {
     const material = this.activeMaterial;
     const sentence = material?.sentences.find(
       (candidate) => candidate.id === this.selectedSentenceId
@@ -1314,8 +1334,12 @@ export class KakitoriView extends ItemView {
       await this.plugin.tts.play(
         sentence.text,
         config,
-        this.playbackSpeed
+        this.playbackSpeed,
+        forceRegenerate
       );
+      if (forceRegenerate) {
+        new Notice("当前句音频已重新生成。");
+      }
     } catch {
       new Notice("语音播放失败，请检查 Azure 区域、密钥和网络。");
     }

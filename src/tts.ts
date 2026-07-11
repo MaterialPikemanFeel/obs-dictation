@@ -73,11 +73,16 @@ export class AzureTtsService {
   async play(
     text: string,
     config: AzureSpeechConfig,
-    playbackRate: number
+    playbackRate: number,
+    forceRegenerate = false
   ): Promise<void> {
     const requestId = ++this.playRequestId;
     this.stopAudio();
-    const audioData = await this.getAudio(text, config);
+    const audioData = await this.getAudio(
+      text,
+      config,
+      forceRegenerate
+    );
     if (requestId !== this.playRequestId) {
       return;
     }
@@ -121,12 +126,16 @@ export class AzureTtsService {
 
   private async getAudio(
     text: string,
-    config: AzureSpeechConfig
+    config: AzureSpeechConfig,
+    forceRegenerate = false
   ): Promise<ArrayBuffer> {
     const cachePath = normalizePath(
       `${CACHE_DIRECTORY}/${await this.getCacheKey(text, config)}.mp3`
     );
-    if (await this.app.vault.adapter.exists(cachePath)) {
+    if (
+      !forceRegenerate &&
+      (await this.app.vault.adapter.exists(cachePath))
+    ) {
       return this.app.vault.adapter.readBinary(cachePath);
     }
 
