@@ -30,6 +30,7 @@ export const VIEW_TYPE_KAKITORI = "kakitori-view";
 
 type KakitoriScreen = "library" | "records" | "home" | "paper" | "card";
 type NotesTab = "sentence" | "highlights" | "article";
+type RecordSort = "article-order" | "recent" | "oldest";
 
 export class KakitoriView extends ItemView {
   private materials: KakitoriMaterial[] = [];
@@ -45,6 +46,11 @@ export class KakitoriView extends ItemView {
   private pinnedSentenceId: string | null = null;
   private notesTab: NotesTab = "sentence";
   private notesCollapsed = false;
+  private recordMaterialId: string | null = null;
+  private recordSearchQuery = "";
+  private recordSort: RecordSort = "article-order";
+  private readonly collapsedRecordMaterialIds = new Set<string>();
+  private readonly expandedRecordNoteIds = new Set<string>();
   private playbackSpeed = 1;
   private floatingControlsEl: HTMLElement | null = null;
   private selectionPopoverEl: HTMLElement | null = null;
@@ -141,6 +147,7 @@ export class KakitoriView extends ItemView {
     const main = app.createDiv({ cls: "kakitori-main" });
 
     if (this.screen === "records") {
+      main.addClass("is-records");
       this.renderRecords(main);
       return;
     }
@@ -309,59 +316,365 @@ export class KakitoriView extends ItemView {
   }
 
   private renderRecords(main: HTMLElement): void {
-    const heading = main.createDiv({ cls: "kakitori-page-heading" });
-    const headingText = heading.createDiv();
-    headingText.createEl("h1", { text: "记录" });
-    headingText.createEl("p", {
-      text: "保存需要留意的句子和其中的书写重点。"
+    const materialsWithRecords = this.materials
+      .map((material) => ({
+        material,
+        count: material.sentences.filter(
+          (sentence) => sentence.highlights.length > 0
+        ).length
+      }))
+      .filter(({ count }) => count > 0)
+      .sort((left, right) =>
+        left.material.title.localeCompare(right.material.title, "ja")
+      );
+    const totalCount = materialsWithRecords.reduce(
+      (count, entry) => count + entry.count,
+      0
+    );
+
+    if (
+      this.recordMaterialId &&
+      !materialsWithRecords.some(
+        ({ material }) => material.id === this.recordMaterialId
+      )
+    ) {
+      this.recordMaterialId = null;
+    }
+
+    const workspace = main.createDiv({ cls: "kakitori-records-workspace" });
+    const sidebar = workspace.createEl("aside", {
+      cls: "kakitori-records-sidebar"
+    });
+    const navigation = sidebar.createDiv({
+      cls: "kakitori-records-navigation"
+    });
+    const libraryButton = navigation.createEl("button");
+    setIcon(libraryButton.createSpan(), "library");
+    libraryButton.createSpan({ text: "素材库" });
+    libraryButton.addEventListener("click", () => this.openLibrary());
+    const recordsButton = navigation.createEl("button", {
+      cls: "is-active"
+    });
+    setIcon(recordsButton.createSpan(), "highlighter");
+    recordsButton.createSpan({ text: "记录" });
+    recordsButton.createSpan({
+      cls: "kakitori-sidebar-count",
+      text: `${totalCount}`
     });
 
-    const records = this.materials
-      .flatMap((material) =>
-        material.sentences
-          .filter((sentence) => sentence.highlights.length > 0)
-          .map((sentence) => ({ material, sentence }))
-      )
-      .sort((left, right) =>
-        (right.sentence.recordedAt ?? right.material.updatedAt).localeCompare(
-          left.sentence.recordedAt ?? left.material.updatedAt
-        )
-      );
+    const sources = sidebar.createDiv({ cls: "kakitori-record-sources" });
+    sources.createDiv({ cls: "kakitori-sidebar-label", text: "来源" });
+    const allSources = sources.createEl("button", {
+      cls: this.recordMaterialId === null ? "is-active" : ""
+    });
+    allSources.createSpan({ text: "全部记录" });
+    allSources.createSpan({
+      cls: "kakitori-sidebar-count",
+      text: `${totalCount}`
+    });
+    allSources.addEventListener("click", () => {
+      this.recordMaterialId = null;
+      this.render();
+    });
+    for (const { material, count } of materialsWithRecords) {
+      const source = sources.createEl("button", {
+        cls: this.recordMaterialId === material.id ? "is-active" : ""
+      });
+      source.createSpan({
+        cls: "kakitori-record-source-name",
+        text: material.title
+      });
+      source.createSpan({
+        cls: "kakitori-sidebar-count",
+        text: `${count}`
+      });
+      source.addEventListener("click", () => {
+        this.recordMaterialId = material.id;
+        this.render();
+      });
+    }
 
-    if (records.length === 0) {
-      const empty = main.createDiv({ cls: "kakitori-empty-state" });
+    const content = workspace.createDiv({ cls: "kakitori-records-content" });
+    const heading = content.createDiv({ cls: "kakitori-records-heading" });
+    const headingText = heading.createDiv();
+    headingText.createEl("h1", { text: "记录" });
+    const resultCount = headingText.createEl("p");
+    const toolbar = heading.createDiv({ cls: "kakitori-records-toolbar" });
+    const searchField = toolbar.createDiv({
+      cls: "kakitori-record-search"
+    });
+    setIcon(searchField.createSpan(), "search");
+    const search = searchField.createEl("input", {
+      type: "search",
+      value: this.recordSearchQuery,
+      attr: {
+        "aria-label": "搜索记录",
+        placeholder: "搜索句子、来源或备注"
+      }
+    });
+    const sort = toolbar.createEl("select", {
+      attr: {
+        "aria-label": "记录排序",
+        title: "记录排序"
+      }
+    });
+    const sortOptions: Array<{ value: RecordSort; label: string }> = [
+      { value: "article-order", label: "原文顺序" },
+      { value: "recent", label: "最近记录" },
+      { value: "oldest", label: "最早记录" }
+    ];
+    for (const option of sortOptions) {
+      sort.createEl("option", {
+        text: option.label,
+        value: option.value
+      });
+    }
+    sort.value = this.recordSort;
+
+    const results = content.createDiv({ cls: "kakitori-record-results" });
+    const renderResults = (): void => {
+      results.empty();
+      this.renderRecordResults(results, resultCount);
+    };
+    search.addEventListener("input", () => {
+      this.recordSearchQuery = search.value;
+      renderResults();
+    });
+    sort.addEventListener("change", () => {
+      if (
+        sort.value === "article-order" ||
+        sort.value === "recent" ||
+        sort.value === "oldest"
+      ) {
+        this.recordSort = sort.value;
+        renderResults();
+      }
+    });
+    renderResults();
+  }
+
+  private renderRecordResults(
+    container: HTMLElement,
+    resultCount: HTMLElement
+  ): void {
+    const query = this.recordSearchQuery.trim().toLocaleLowerCase();
+    const groups = this.materials
+      .filter(
+        (material) =>
+          this.recordMaterialId === null ||
+          material.id === this.recordMaterialId
+      )
+      .map((material) => {
+        const sourceMatches = material.title
+          .toLocaleLowerCase()
+          .includes(query);
+        const records = material.sentences
+          .map((sentence, index) => ({ sentence, index }))
+          .filter(
+            ({ sentence }) =>
+              sentence.highlights.length > 0 &&
+              (sourceMatches ||
+                sentence.text.toLocaleLowerCase().includes(query) ||
+                sentence.note.toLocaleLowerCase().includes(query))
+          );
+        records.sort((left, right) => {
+          if (this.recordSort === "article-order") {
+            return left.index - right.index;
+          }
+          const leftDate =
+            left.sentence.recordedAt ?? material.updatedAt;
+          const rightDate =
+            right.sentence.recordedAt ?? material.updatedAt;
+          return this.recordSort === "recent"
+            ? rightDate.localeCompare(leftDate)
+            : leftDate.localeCompare(rightDate);
+        });
+        return { material, records };
+      })
+      .filter(({ records }) => records.length > 0)
+      .sort((left, right) => {
+        if (this.recordSort === "article-order") {
+          return left.material.title.localeCompare(
+            right.material.title,
+            "ja"
+          );
+        }
+        const leftDate =
+          left.records[0]?.sentence.recordedAt ??
+          left.material.updatedAt;
+        const rightDate =
+          right.records[0]?.sentence.recordedAt ??
+          right.material.updatedAt;
+        return this.recordSort === "recent"
+          ? rightDate.localeCompare(leftDate)
+          : leftDate.localeCompare(rightDate);
+      });
+    const visibleCount = groups.reduce(
+      (count, group) => count + group.records.length,
+      0
+    );
+    resultCount.setText(
+      this.recordSearchQuery.trim() || this.recordMaterialId
+        ? `显示 ${visibleCount} 条记录`
+        : `共 ${visibleCount} 条记录，按来源文章整理。`
+    );
+
+    if (visibleCount === 0) {
+      const empty = container.createDiv({ cls: "kakitori-empty-state" });
       const icon = empty.createDiv({ cls: "kakitori-empty-icon" });
-      setIcon(icon, "highlighter");
-      empty.createEl("h2", { text: "还没有记录" });
+      setIcon(icon, this.materials.some((material) =>
+        material.sentences.some(
+          (sentence) => sentence.highlights.length > 0
+        )
+      ) ? "search-x" : "highlighter");
+      empty.createEl("h2", {
+        text:
+          this.recordSearchQuery.trim() || this.recordMaterialId
+            ? "没有符合条件的记录"
+            : "还没有记录"
+      });
       empty.createEl("p", {
-        text: "揭示句子后选中文字，再点击“高亮并记录”。"
+        text:
+          this.recordSearchQuery.trim() || this.recordMaterialId
+            ? "可以修改搜索内容，或在左侧切换来源。"
+            : "揭示句子后选中文字，再点击“高亮并记录”。"
       });
       return;
     }
 
-    const list = main.createDiv({ cls: "kakitori-record-list" });
-    for (const { material, sentence } of records) {
-      const card = list.createDiv({ cls: "kakitori-record-card" });
-      const header = card.createDiv({ cls: "kakitori-record-header" });
-      header.createEl("button", {
-        cls: "kakitori-record-source",
-        text: material.title
-      }).addEventListener("click", () => {
-        this.openRecordSentence(material, sentence.id);
+    for (const { material, records } of groups) {
+      const group = container.createDiv({ cls: "kakitori-record-group" });
+      const groupHeader = group.createEl("button", {
+        cls: "kakitori-record-group-header"
       });
-      header.createSpan({
-        text: `第 ${material.sentences.indexOf(sentence) + 1} 句`
+      const groupTitle = groupHeader.createDiv();
+      const chevron = groupTitle.createSpan({
+        cls: "kakitori-record-group-chevron"
+      });
+      setIcon(chevron, "chevron-down");
+      groupTitle.createEl("h2", { text: material.title });
+      groupTitle.createSpan({
+        cls: "kakitori-record-group-count",
+        text: `${records.length} 条`
+      });
+      const isCollapsed = this.collapsedRecordMaterialIds.has(material.id);
+      group.classList.toggle("is-collapsed", isCollapsed);
+      groupHeader.setAttribute("aria-expanded", `${!isCollapsed}`);
+      groupHeader.addEventListener("click", () => {
+        if (this.collapsedRecordMaterialIds.has(material.id)) {
+          this.collapsedRecordMaterialIds.delete(material.id);
+        } else {
+          this.collapsedRecordMaterialIds.add(material.id);
+        }
+        group.classList.toggle(
+          "is-collapsed",
+          this.collapsedRecordMaterialIds.has(material.id)
+        );
+        groupHeader.setAttribute(
+          "aria-expanded",
+          `${!this.collapsedRecordMaterialIds.has(material.id)}`
+        );
       });
 
-      this.renderSentenceText(
-        card,
-        sentence,
-        "kakitori-record-sentence",
-        false
+      const list = group.createDiv({ cls: "kakitori-record-list" });
+      for (const { sentence, index } of records) {
+        this.renderRecordCard(list, material, sentence, index);
+      }
+    }
+  }
+
+  private renderRecordCard(
+    container: HTMLElement,
+    material: KakitoriMaterial,
+    sentence: KakitoriSentence,
+    sentenceIndex: number
+  ): void {
+    const card = container.createDiv({ cls: "kakitori-record-card" });
+    const header = card.createDiv({ cls: "kakitori-record-header" });
+    const meta = header.createDiv({ cls: "kakitori-record-meta" });
+    meta.createSpan({ text: `第 ${sentenceIndex + 1} 句` });
+    if (sentence.recordedAt) {
+      meta.createSpan({
+        text: new Date(sentence.recordedAt).toLocaleDateString("zh-CN")
+      });
+    }
+    const actions = header.createDiv({ cls: "kakitori-record-card-actions" });
+    const open = actions.createEl("button", {
+      attr: {
+        "aria-label": "返回原句",
+        title: "返回原句"
+      }
+    });
+    setIcon(open, "locate-fixed");
+    open.addEventListener("click", () => {
+      this.openRecordSentence(material, sentence.id);
+    });
+    const noteButton = actions.createEl("button", {
+      cls: sentence.note.trim() ? "has-note" : "",
+      attr: {
+        "aria-label": sentence.note.trim() ? "编辑备注" : "添加备注",
+        title: sentence.note.trim() ? "编辑备注" : "添加备注"
+      }
+    });
+    setIcon(noteButton, "message-square");
+    noteButton.addEventListener("click", () => {
+      if (this.expandedRecordNoteIds.has(sentence.id)) {
+        this.expandedRecordNoteIds.delete(sentence.id);
+      } else {
+        this.expandedRecordNoteIds.clear();
+        this.expandedRecordNoteIds.add(sentence.id);
+      }
+      this.render();
+    });
+    const more = actions.createEl("button", {
+      attr: {
+        "aria-label": "更多操作",
+        title: "更多操作"
+      }
+    });
+    setIcon(more, "ellipsis");
+    more.addEventListener("click", (event) => {
+      this.openRecordMenu(event, material, sentence);
+    });
+
+    const sentenceText = this.renderSentenceText(
+      card,
+      sentence,
+      "kakitori-record-sentence",
+      false
+    );
+    sentenceText.addClass("has-interactive-highlights");
+    for (const highlighted of sentenceText.querySelectorAll<HTMLElement>(
+      ".kakitori-sentence-character.is-highlighted"
+    )) {
+      highlighted.setAttribute("title", "点击管理这段高亮");
+    }
+    sentenceText.addEventListener("click", (event) => {
+      const target =
+        event.target instanceof HTMLElement
+          ? event.target.closest<HTMLElement>(
+              "[data-character-index].is-highlighted"
+            )
+          : null;
+      const characterIndex = Number(target?.dataset.characterIndex);
+      if (!target || !Number.isInteger(characterIndex)) {
+        return;
+      }
+      const highlight = sentence.highlights.find(
+        (candidate) =>
+          characterIndex >= candidate.start &&
+          characterIndex < candidate.end
       );
-      this.renderHighlightChips(card, material, sentence);
+      if (highlight) {
+        this.openHighlightMenu(event, material, sentence, highlight.id);
+      }
+    });
 
-      const note = card.createEl("textarea", {
+    if (this.expandedRecordNoteIds.has(sentence.id)) {
+      const noteEditor = card.createDiv({
+        cls: "kakitori-record-note-editor"
+      });
+      const note = noteEditor.createEl("textarea", {
         cls: "kakitori-record-note",
         attr: {
           rows: "2",
@@ -373,23 +686,77 @@ export class KakitoriView extends ItemView {
         sentence.note = note.value;
         this.scheduleSave(material);
       });
-
-      const actions = card.createDiv({ cls: "kakitori-record-actions" });
-      const open = actions.createEl("button", { text: "返回原句" });
-      open.addEventListener("click", () => {
-        this.openRecordSentence(material, sentence.id);
+      const collapse = noteEditor.createEl("button", { text: "收起" });
+      collapse.addEventListener("click", () => {
+        this.expandedRecordNoteIds.delete(sentence.id);
+        this.render();
       });
-      const remove = actions.createEl("button", {
-        cls: "mod-warning",
-        text: "删除记录"
+      window.setTimeout(() => note.focus());
+    } else if (sentence.note.trim()) {
+      const notePreview = card.createEl("button", {
+        cls: "kakitori-record-note-preview"
       });
-      remove.addEventListener("click", () => {
-        sentence.highlights = [];
-        sentence.recordedAt = null;
-        void this.plugin.saveMaterial(material);
+      setIcon(notePreview.createSpan(), "message-square");
+      notePreview.createSpan({ text: sentence.note });
+      notePreview.addEventListener("click", () => {
+        this.expandedRecordNoteIds.clear();
+        this.expandedRecordNoteIds.add(sentence.id);
         this.render();
       });
     }
+  }
+
+  private openRecordMenu(
+    event: MouseEvent,
+    material: KakitoriMaterial,
+    sentence: KakitoriSentence
+  ): void {
+    const menu = new Menu();
+    menu.addItem((item) => {
+      item
+        .setTitle("删除记录")
+        .setIcon("trash-2")
+        .onClick(() => this.confirmDeleteRecord(material, sentence));
+    });
+    menu.showAtMouseEvent(event);
+  }
+
+  private confirmDeleteRecord(
+    material: KakitoriMaterial,
+    sentence: KakitoriSentence
+  ): void {
+    new ConfirmModal(
+      this.app,
+      "删除记录？",
+      "这句的全部黄色高亮会被移除，句子备注仍会保留。",
+      "删除",
+      () => {
+        sentence.highlights = [];
+        sentence.recordedAt = null;
+        this.expandedRecordNoteIds.delete(sentence.id);
+        this.normalizeRecordMaterialFilter(material);
+        void this.plugin.saveMaterial(material);
+        this.render();
+      }
+    ).open();
+  }
+
+  private openHighlightMenu(
+    event: MouseEvent,
+    material: KakitoriMaterial,
+    sentence: KakitoriSentence,
+    highlightId: string
+  ): void {
+    const menu = new Menu();
+    menu.addItem((item) => {
+      item
+        .setTitle("取消这段高亮")
+        .setIcon("eraser")
+        .onClick(() => {
+          this.removeSentenceHighlight(material, sentence, highlightId);
+        });
+    });
+    menu.showAtMouseEvent(event);
   }
 
   private renderArticleHome(
@@ -1118,15 +1485,36 @@ export class KakitoriView extends ItemView {
       });
       setIcon(remove, "x");
       remove.addEventListener("click", () => {
-        sentence.highlights = sentence.highlights.filter(
-          (candidate) => candidate.id !== highlight.id
-        );
-        if (sentence.highlights.length === 0) {
-          sentence.recordedAt = null;
-        }
-        void this.plugin.saveMaterial(material);
-        this.render();
+        this.removeSentenceHighlight(material, sentence, highlight.id);
       });
+    }
+  }
+
+  private removeSentenceHighlight(
+    material: KakitoriMaterial,
+    sentence: KakitoriSentence,
+    highlightId: string
+  ): void {
+    sentence.highlights = sentence.highlights.filter(
+      (candidate) => candidate.id !== highlightId
+    );
+    if (sentence.highlights.length === 0) {
+      sentence.recordedAt = null;
+      this.expandedRecordNoteIds.delete(sentence.id);
+    }
+    this.normalizeRecordMaterialFilter(material);
+    void this.plugin.saveMaterial(material);
+    this.render();
+  }
+
+  private normalizeRecordMaterialFilter(material: KakitoriMaterial): void {
+    if (
+      this.recordMaterialId === material.id &&
+      !material.sentences.some(
+        (candidate) => candidate.highlights.length > 0
+      )
+    ) {
+      this.recordMaterialId = null;
     }
   }
 
