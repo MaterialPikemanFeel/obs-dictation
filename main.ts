@@ -72,6 +72,20 @@ export default class KakitoriPlugin extends Plugin {
     await this.storage.saveMaterial(material);
   }
 
+  async renameMaterial(
+    material: KakitoriMaterial,
+    title: string
+  ): Promise<void> {
+    material.title = title;
+    await this.storage.saveMaterial(material);
+    new Notice(`已重命名为「${title}」`);
+  }
+
+  async deleteMaterial(material: KakitoriMaterial): Promise<void> {
+    await this.storage.deleteMaterial(material.id);
+    new Notice(`已删除「${material.title}」`);
+  }
+
   async saveSettings(): Promise<void> {
     await this.storage.saveSettings(this.kakitoriSettings);
   }

@@ -1,5 +1,6 @@
 import {
   ItemView,
+  Menu,
   Notice,
   setIcon
 } from "obsidian";
@@ -7,6 +8,7 @@ import type { WorkspaceLeaf } from "obsidian";
 import type KakitoriPlugin from "../main";
 import { ConfirmModal } from "./confirm-modal";
 import { ImportMaterialModal } from "./import-modal";
+import { RenameMaterialModal } from "./rename-material-modal";
 import {
   buildPaperPageLayout,
   getPaperPageCount,
@@ -239,16 +241,34 @@ export class KakitoriView extends ItemView {
 
     const grid = main.createDiv({ cls: "kakitori-library-grid" });
     for (const material of this.materials) {
-      const card = grid.createEl("button", {
+      const card = grid.createDiv({
         cls: "kakitori-material-card"
       });
+      card.setAttribute("role", "button");
+      card.setAttribute("tabindex", "0");
       const titleRow = card.createDiv({ cls: "kakitori-card-title-row" });
       titleRow.createEl("h2", { text: material.title });
-      const direction = titleRow.createSpan({
+      const titleActions = titleRow.createDiv({
+        cls: "kakitori-card-title-actions"
+      });
+      const direction = titleActions.createSpan({
         cls: "kakitori-direction-badge",
         text: material.direction === "vertical" ? "竖排" : "横排"
       });
       direction.setAttribute("aria-label", `当前${direction.textContent}`);
+      const moreButton = titleActions.createEl("button", {
+        cls: "kakitori-card-more",
+        attr: {
+          "aria-label": `管理「${material.title}」`,
+          title: "更多操作"
+        }
+      });
+      setIcon(moreButton, "ellipsis");
+      moreButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.openMaterialMenu(event, material);
+      });
       card.createEl("p", {
         cls: "kakitori-card-preview",
         text: material.sentences
@@ -275,10 +295,15 @@ export class KakitoriView extends ItemView {
             ? `原稿纸 ${material.lastPaperPage + 1}/${pageCount}`
             : "尚未开始"
       });
-      card.addEventListener("click", () => {
-        this.activeMaterial = material;
-        this.screen = "home";
-        this.render();
+      card.addEventListener("click", () => this.openMaterial(material));
+      card.addEventListener("keydown", (event) => {
+        if (
+          event.target === card &&
+          (event.key === "Enter" || event.key === " ")
+        ) {
+          event.preventDefault();
+          this.openMaterial(material);
+        }
       });
     }
   }
@@ -1571,6 +1596,68 @@ export class KakitoriView extends ItemView {
       this.screen = "home";
       this.render();
     }).open();
+  }
+
+  private openMaterial(material: KakitoriMaterial): void {
+    this.activeMaterial = material;
+    this.screen = "home";
+    this.render();
+  }
+
+  private openMaterialMenu(
+    event: MouseEvent,
+    material: KakitoriMaterial
+  ): void {
+    const menu = new Menu();
+    menu.addItem((item) => {
+      item
+        .setTitle("重命名")
+        .setIcon("pencil")
+        .onClick(() => this.openRenameMaterialModal(material));
+    });
+    menu.addSeparator();
+    menu.addItem((item) => {
+      item
+        .setTitle("删除素材")
+        .setIcon("trash-2")
+        .onClick(() => this.confirmDeleteMaterial(material));
+    });
+    menu.showAtMouseEvent(event);
+  }
+
+  private openRenameMaterialModal(material: KakitoriMaterial): void {
+    new RenameMaterialModal(
+      this.app,
+      material.title,
+      async (title) => {
+        await this.plugin.renameMaterial(material, title);
+        this.render();
+      }
+    ).open();
+  }
+
+  private confirmDeleteMaterial(material: KakitoriMaterial): void {
+    new ConfirmModal(
+      this.app,
+      "删除素材？",
+      `「${material.title}」的练习进度、笔记和高亮记录也会一并删除。此操作无法撤销。`,
+      "删除",
+      () => {
+        void this.deleteMaterial(material);
+      }
+    ).open();
+  }
+
+  private async deleteMaterial(material: KakitoriMaterial): Promise<void> {
+    await this.plugin.deleteMaterial(material);
+    this.materials = this.materials.filter(
+      (candidate) => candidate.id !== material.id
+    );
+    if (this.activeMaterial?.id === material.id) {
+      this.activeMaterial = null;
+      this.screen = "library";
+    }
+    this.render();
   }
 
   private openLibrary(): void {

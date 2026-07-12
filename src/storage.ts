@@ -181,6 +181,19 @@ export class KakitoriStorage {
     ]);
   }
 
+  async deleteMaterial(materialId: string): Promise<void> {
+    await Promise.all(
+      [this.materialPath(materialId), this.notebookPath(materialId)].map(
+        async (path) => {
+          const normalized = normalizePath(path);
+          if (await this.app.vault.adapter.exists(normalized)) {
+            await this.app.vault.adapter.remove(normalized);
+          }
+        }
+      )
+    );
+  }
+
   private async readMaterialFile(path: string): Promise<KakitoriMaterial | null> {
     try {
       const raw = await this.app.vault.adapter.read(normalizePath(path));
