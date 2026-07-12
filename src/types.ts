@@ -1,9 +1,11 @@
 export type WritingDirection = "vertical" | "horizontal";
 export type CardDeckMode = "all" | "difficult" | "random";
+export type LibrarySort = "practiced" | "created" | "name";
 
 export interface KakitoriSettings {
   defaultDirection: WritingDirection;
   showSentenceNumbersOnHover: boolean;
+  librarySort: LibrarySort;
   azureRegion: string;
   azureVoice: string;
   azureSpeechKey: string;
@@ -34,6 +36,7 @@ export interface KakitoriMaterial {
   fullNote: string;
   createdAt: string;
   updatedAt: string;
+  lastPracticedAt: string | null;
   lastPaperPage: number;
   lastCardSentenceId: string | null;
 }
@@ -46,6 +49,7 @@ export interface ImportedMaterial {
 export const DEFAULT_SETTINGS: KakitoriSettings = {
   defaultDirection: "vertical",
   showSentenceNumbersOnHover: false,
+  librarySort: "practiced",
   azureRegion: "eastus2",
   azureVoice: "ja-JP-NanamiNeural",
   azureSpeechKey: ""

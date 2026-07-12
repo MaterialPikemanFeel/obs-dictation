@@ -21,6 +21,7 @@ import {
 import type { AzureSpeechConfig } from "./tts";
 import type {
   CardDeckMode,
+  LibrarySort,
   KakitoriMaterial,
   KakitoriSentence,
   WritingDirection
@@ -230,6 +231,42 @@ export class KakitoriView extends ItemView {
       text: "只显示通过 Kakitori 专门导入的听写素材。"
     });
 
+    if (this.materials.length > 0) {
+      const sortField = heading.createDiv({
+        cls: "kakitori-library-sort"
+      });
+      sortField.createSpan({ text: "排序" });
+      const sort = sortField.createEl("select", {
+        attr: {
+          "aria-label": "素材排序",
+          title: "素材排序"
+        }
+      });
+      const sortOptions: Array<{ value: LibrarySort; label: string }> = [
+        { value: "practiced", label: "最近练习" },
+        { value: "created", label: "最近创建" },
+        { value: "name", label: "名称" }
+      ];
+      for (const option of sortOptions) {
+        sort.createEl("option", {
+          text: option.label,
+          value: option.value
+        });
+      }
+      sort.value = this.plugin.kakitoriSettings.librarySort;
+      sort.addEventListener("change", () => {
+        if (
+          sort.value === "practiced" ||
+          sort.value === "created" ||
+          sort.value === "name"
+        ) {
+          this.plugin.kakitoriSettings.librarySort = sort.value;
+          void this.plugin.saveSettings();
+          this.render();
+        }
+      });
+    }
+
     if (this.materials.length === 0) {
       const empty = main.createDiv({ cls: "kakitori-empty-state" });
       const icon = empty.createDiv({ cls: "kakitori-empty-icon" });
@@ -247,7 +284,7 @@ export class KakitoriView extends ItemView {
     }
 
     const grid = main.createDiv({ cls: "kakitori-library-grid" });
-    for (const material of this.materials) {
+    for (const material of this.getSortedMaterials()) {
       const card = grid.createDiv({
         cls: "kakitori-material-card"
       });
@@ -313,6 +350,32 @@ export class KakitoriView extends ItemView {
         }
       });
     }
+  }
+
+  private getSortedMaterials(): KakitoriMaterial[] {
+    const materials = [...this.materials];
+    if (this.plugin.kakitoriSettings.librarySort === "name") {
+      return materials.sort((left, right) =>
+        left.title.localeCompare(right.title, "ja")
+      );
+    }
+    if (this.plugin.kakitoriSettings.librarySort === "created") {
+      return materials.sort((left, right) =>
+        right.createdAt.localeCompare(left.createdAt)
+      );
+    }
+    return materials.sort((left, right) => {
+      if (left.lastPracticedAt && right.lastPracticedAt) {
+        return right.lastPracticedAt.localeCompare(left.lastPracticedAt);
+      }
+      if (left.lastPracticedAt) {
+        return -1;
+      }
+      if (right.lastPracticedAt) {
+        return 1;
+      }
+      return right.createdAt.localeCompare(left.createdAt);
+    });
   }
 
   private renderRecords(main: HTMLElement): void {
@@ -839,7 +902,7 @@ export class KakitoriView extends ItemView {
       this.revealedSentenceIds.clear();
       this.selectedSentenceId = null;
       this.pinnedSentenceId = null;
-      void this.plugin.saveMaterial(material);
+      this.markMaterialPracticed(material);
       this.screen = "paper";
       this.render();
     });
@@ -853,7 +916,7 @@ export class KakitoriView extends ItemView {
       this.currentCardIndex = 0;
       this.cardRevealed = false;
       this.selectedSentenceId = this.cardSequenceIds[0] ?? null;
-      void this.plugin.saveMaterial(material);
+      this.markMaterialPracticed(material);
       this.screen = "card";
       this.render();
     });
@@ -2141,6 +2204,7 @@ export class KakitoriView extends ItemView {
     this.revealedSentenceIds.clear();
     this.selectedSentenceId = null;
     this.pinnedSentenceId = null;
+    this.markMaterialPracticed(material);
     this.screen = "paper";
     this.render();
   }
@@ -2162,8 +2226,14 @@ export class KakitoriView extends ItemView {
     this.selectedSentenceId =
       this.cardSequenceIds[this.currentCardIndex] ?? null;
     this.pinnedSentenceId = null;
+    this.markMaterialPracticed(material);
     this.screen = "card";
     this.render();
+  }
+
+  private markMaterialPracticed(material: KakitoriMaterial): void {
+    material.lastPracticedAt = new Date().toISOString();
+    void this.plugin.saveMaterial(material);
   }
 
   private handleKeyboard(event: KeyboardEvent): void {

@@ -26,6 +26,7 @@ interface MaterialFile {
   sentenceIds: string[];
   createdAt: string;
   updatedAt: string;
+  lastPracticedAt?: string | null;
   lastPaperPage: number;
   lastCardSentenceId?: string | null;
 }
@@ -71,6 +72,11 @@ export class KakitoriStorage {
           parsed.defaultDirection === "horizontal" ? "horizontal" : "vertical",
         showSentenceNumbersOnHover:
           parsed.showSentenceNumbersOnHover === true,
+        librarySort:
+          parsed.librarySort === "created" ||
+          parsed.librarySort === "name"
+            ? parsed.librarySort
+            : "practiced",
         azureRegion:
           parsed.azureRegion?.trim() || DEFAULT_SETTINGS.azureRegion,
         azureVoice:
@@ -130,6 +136,7 @@ export class KakitoriStorage {
       fullNote: "",
       createdAt: now,
       updatedAt: now,
+      lastPracticedAt: null,
       lastPaperPage: 0,
       lastCardSentenceId: null
     };
@@ -149,6 +156,7 @@ export class KakitoriStorage {
       sentenceIds: material.sentences.map((sentence) => sentence.id),
       createdAt: material.createdAt,
       updatedAt: material.updatedAt,
+      lastPracticedAt: material.lastPracticedAt,
       lastPaperPage: material.lastPaperPage,
       lastCardSentenceId: material.lastCardSentenceId
     };
@@ -232,6 +240,13 @@ export class KakitoriStorage {
         fullNote: notebook.fullNote,
         createdAt: materialFile.createdAt,
         updatedAt: materialFile.updatedAt,
+        lastPracticedAt:
+          typeof materialFile.lastPracticedAt === "string"
+            ? materialFile.lastPracticedAt
+            : materialFile.lastPaperPage > 0 ||
+                Boolean(materialFile.lastCardSentenceId)
+              ? materialFile.updatedAt
+              : null,
         lastPaperPage: Math.max(0, materialFile.lastPaperPage),
         lastCardSentenceId:
           materialFile.lastCardSentenceId &&

@@ -158,6 +158,19 @@
   font-size: 13px;
 }
 
+.kakitori-library-sort {
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  gap: 8px;
+}
+
+.kakitori-library-sort select {
+  min-width: 112px;
+  height: 34px;
+}
+
 .kakitori-library-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
@@ -1815,6 +1828,12 @@
 
   .kakitori-main {
     padding: 18px 12px 28px;
+  }
+
+  .kakitori-page-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 14px;
   }
 
   .kakitori-records-content {
