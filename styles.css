@@ -850,118 +850,64 @@
   z-index: 5;
   min-width: 0;
   min-height: 0;
-  border-radius: 2px;
+  box-sizing: border-box;
   cursor: pointer;
 }
 
 .kakitori-mask {
-  --mask-edge: #d7dbe1;
-  --mask-center: #fafafa;
-  border: 1px solid rgba(124, 132, 143, 0.48);
-  background:
-    linear-gradient(
-      90deg,
-      var(--mask-edge),
-      var(--mask-center) 18%,
-      var(--mask-center) 82%,
-      var(--mask-edge)
-    );
-  box-shadow:
-    0 2px 4px rgba(45, 50, 60, 0.09),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(79, 91, 115, 0.14);
+  border-radius: 4px;
+  background: #77849e;
+  box-shadow: 0 2px 5px rgba(48, 56, 73, 0.15);
 }
 
-.kakitori-mask.is-tone-1 {
-  --mask-edge: #dce0e7;
-  --mask-center: #f4f6f8;
+.kakitori-paper.is-horizontal .kakitori-mask {
+  transform: translateY(10%) scaleY(0.8);
 }
 
-.kakitori-mask.is-tone-2 {
-  --mask-edge: #deddd8;
-  --mask-center: #faf9f5;
-}
-
-.kakitori-mask.is-tone-3 {
-  --mask-edge: #d6dfdc;
-  --mask-center: #f4f8f6;
-}
-
-.kakitori-paper.is-vertical
-  .kakitori-mask.is-sentence-start::before,
-.kakitori-paper.is-horizontal
-  .kakitori-mask.is-sentence-start::before {
-  position: absolute;
-  z-index: 2;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: rgba(91, 99, 111, 0.7);
-  content: "";
-}
-
-.kakitori-paper.is-vertical
-  .kakitori-mask.is-sentence-start::before {
-  top: 3px;
-  right: 3px;
+.kakitori-paper.is-vertical .kakitori-mask {
+  transform: translateX(10%) scaleX(0.8);
 }
 
 .kakitori-paper.is-horizontal
-  .kakitori-mask.is-sentence-start::before {
-  top: 3px;
-  left: 3px;
-}
-
-.kakitori-paper.is-vertical
-  .kakitori-mask.is-sentence-end::after,
-.kakitori-paper.is-horizontal
-  .kakitori-mask.is-sentence-end::after {
-  position: absolute;
-  z-index: 2;
-  border-radius: 2px;
-  background: rgba(91, 99, 111, 0.58);
-  content: "";
-}
-
-.kakitori-paper.is-vertical
-  .kakitori-mask.is-sentence-end::after {
-  bottom: 3px;
-  left: 3px;
-  width: 8px;
-  height: 2px;
+  .kakitori-mask.is-sentence-start {
+  border-top-left-radius: 999px;
+  border-bottom-left-radius: 999px;
 }
 
 .kakitori-paper.is-horizontal
-  .kakitori-mask.is-sentence-end::after {
-  right: 3px;
-  bottom: 3px;
-  width: 2px;
-  height: 8px;
+  .kakitori-mask.is-sentence-end {
+  border-top-right-radius: 999px;
+  border-bottom-right-radius: 999px;
+}
+
+.kakitori-paper.is-vertical
+  .kakitori-mask.is-sentence-start {
+  border-top-left-radius: 999px;
+  border-top-right-radius: 999px;
+}
+
+.kakitori-paper.is-vertical
+  .kakitori-mask.is-sentence-end {
+  border-bottom-right-radius: 999px;
+  border-bottom-left-radius: 999px;
 }
 
 .kakitori-mask:hover {
   z-index: 6;
-  border-color: rgba(112, 120, 132, 0.42);
-  box-shadow:
-    0 4px 9px rgba(42, 47, 58, 0.12),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.82);
+  border-color: rgba(65, 78, 105, 0.28);
+  background: #8290aa;
+  box-shadow: 0 5px 11px rgba(45, 54, 73, 0.22);
 }
 
 .kakitori-mask.is-selected,
 .kakitori-mask.is-pinned {
   z-index: 7;
-  border: 1.5px solid rgba(89, 103, 216, 0.82);
-  background:
-    linear-gradient(
-      90deg,
-      rgba(223, 227, 248, 0.86),
-      rgba(252, 253, 255, 1) 18%,
-      rgba(252, 253, 255, 1) 82%,
-      rgba(223, 227, 248, 0.82)
-    ),
-    #f8f9ff;
+  border: 1.5px solid rgba(72, 87, 203, 0.92);
+  background: #8390aa;
   box-shadow:
-    0 0 0 3px rgba(89, 103, 216, 0.07),
-    0 4px 9px rgba(55, 62, 103, 0.09);
+    0 0 0 3px rgba(89, 103, 216, 0.12),
+    0 5px 11px rgba(45, 54, 73, 0.2);
 }
 
 .kakitori-sentence-region.is-revealed {
