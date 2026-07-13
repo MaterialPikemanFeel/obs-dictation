@@ -855,46 +855,58 @@
 }
 
 .kakitori-mask {
+  border: 0;
+  background: transparent;
+}
+
+.kakitori-mask::before {
+  position: absolute;
   border: 1px solid rgba(79, 91, 115, 0.14);
-  border-radius: 4px;
   background: #77849e;
   box-shadow: 0 2px 5px rgba(48, 56, 73, 0.15);
+  content: "";
+  pointer-events: none;
 }
 
-.kakitori-paper.is-horizontal .kakitori-mask {
-  transform: translateY(10%) scaleY(0.8);
-}
-
-.kakitori-paper.is-vertical .kakitori-mask {
-  transform: translateX(10%) scaleX(0.8);
-}
-
-.kakitori-paper.is-horizontal
-  .kakitori-mask.is-sentence-start {
-  border-top-left-radius: 999px;
-  border-bottom-left-radius: 999px;
+.kakitori-paper.is-horizontal .kakitori-mask::before {
+  top: 12%;
+  right: 0;
+  bottom: 12%;
+  left: 0;
 }
 
 .kakitori-paper.is-horizontal
-  .kakitori-mask.is-sentence-end {
-  border-top-right-radius: 999px;
-  border-bottom-right-radius: 999px;
+  .kakitori-mask.is-sentence-start::before {
+  left: 2px;
+}
+
+.kakitori-paper.is-horizontal
+  .kakitori-mask.is-sentence-end::before {
+  right: 2px;
+}
+
+.kakitori-paper.is-vertical .kakitori-mask::before {
+  top: 0;
+  right: 12%;
+  bottom: 0;
+  left: 12%;
 }
 
 .kakitori-paper.is-vertical
-  .kakitori-mask.is-sentence-start {
-  border-top-left-radius: 999px;
-  border-top-right-radius: 999px;
+  .kakitori-mask.is-sentence-start::before {
+  top: 2px;
 }
 
 .kakitori-paper.is-vertical
-  .kakitori-mask.is-sentence-end {
-  border-bottom-right-radius: 999px;
-  border-bottom-left-radius: 999px;
+  .kakitori-mask.is-sentence-end::before {
+  bottom: 2px;
 }
 
 .kakitori-mask:hover {
   z-index: 6;
+}
+
+.kakitori-mask:hover::before {
   border-color: rgba(65, 78, 105, 0.28);
   background: #8290aa;
   box-shadow: 0 5px 11px rgba(45, 54, 73, 0.22);
@@ -903,11 +915,20 @@
 .kakitori-mask.is-selected,
 .kakitori-mask.is-pinned {
   z-index: 7;
+}
+
+.kakitori-mask.is-selected::before,
+.kakitori-mask.is-pinned::before {
   border: 1.5px solid rgba(72, 87, 203, 0.92);
   background: #8390aa;
   box-shadow:
     0 0 0 3px rgba(89, 103, 216, 0.12),
     0 5px 11px rgba(45, 54, 73, 0.2);
+}
+
+.kakitori-mask:focus-visible::before {
+  border-color: var(--kakitori-accent);
+  box-shadow: 0 0 0 2px rgba(89, 103, 216, 0.2);
 }
 
 .kakitori-sentence-region.is-revealed {

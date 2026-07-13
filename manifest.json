@@ -1,7 +1,7 @@
 {
   "id": "kakitori",
   "name": "Kakitori",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "minAppVersion": "1.8.7",
   "description": "Import Japanese text and practise dictation on a focused 20×20 genkō yōshi.",
   "author": "MaterialPikemanFeel",
