@@ -919,16 +919,46 @@
 
 .kakitori-mask.is-selected::before,
 .kakitori-mask.is-pinned::before {
-  border: 1.5px solid rgba(72, 87, 203, 0.92);
-  background: #8390aa;
+  border: 1.5px solid #5364d8;
+  background: #697896;
   box-shadow:
-    0 0 0 3px rgba(89, 103, 216, 0.12),
-    0 5px 11px rgba(45, 54, 73, 0.2);
+    0 0 0 2px #fffefb,
+    0 0 0 4px rgba(83, 100, 216, 0.82),
+    0 7px 16px rgba(42, 51, 72, 0.25);
+  animation: kakitori-mask-focus 160ms ease-out;
 }
 
 .kakitori-mask:focus-visible::before {
   border-color: var(--kakitori-accent);
-  box-shadow: 0 0 0 2px rgba(89, 103, 216, 0.2);
+  box-shadow:
+    0 0 0 2px #fffefb,
+    0 0 0 4px rgba(83, 100, 216, 0.82),
+    0 7px 16px rgba(42, 51, 72, 0.25);
+}
+
+@keyframes kakitori-mask-focus {
+  from {
+    filter: brightness(1.14);
+    box-shadow:
+      0 0 0 1px #fffefb,
+      0 0 0 1px rgba(83, 100, 216, 0),
+      0 2px 5px rgba(48, 56, 73, 0.15);
+  }
+
+  to {
+    filter: brightness(1);
+    box-shadow:
+      0 0 0 2px #fffefb,
+      0 0 0 4px rgba(83, 100, 216, 0.82),
+      0 7px 16px rgba(42, 51, 72, 0.25);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kakitori-mask.is-selected::before,
+  .kakitori-mask.is-pinned::before {
+    animation: none;
+  }
 }
 
 .kakitori-sentence-region.is-revealed {
