@@ -54,6 +54,7 @@ export class KakitoriView extends ItemView {
   private readonly collapsedRecordMaterialIds = new Set<string>();
   private readonly expandedRecordNoteIds = new Set<string>();
   private readonly recordRevealedHighlightIds = new Set<string>();
+  private readonly recordRevealedSentenceIds = new Set<string>();
   private playbackSpeed = 1;
   private floatingControlsEl: HTMLElement | null = null;
   private selectionPopoverEl: HTMLElement | null = null;
@@ -702,8 +703,9 @@ export class KakitoriView extends ItemView {
       void this.playRecordSentence(sentence, play);
     });
 
+    const sentenceRevealed = this.recordRevealedSentenceIds.has(sentence.id);
     const allRevealed =
-      sentence.highlights.length > 0 &&
+      sentenceRevealed &&
       sentence.highlights.every((highlight) =>
         this.recordRevealedHighlightIds.has(highlight.id)
       );
@@ -717,10 +719,12 @@ export class KakitoriView extends ItemView {
     setIcon(revealAll, allRevealed ? "eye-off" : "eye");
     revealAll.addEventListener("click", () => {
       if (allRevealed) {
+        this.recordRevealedSentenceIds.delete(sentence.id);
         for (const highlight of sentence.highlights) {
           this.recordRevealedHighlightIds.delete(highlight.id);
         }
       } else {
+        this.recordRevealedSentenceIds.add(sentence.id);
         for (const highlight of sentence.highlights) {
           this.recordRevealedHighlightIds.add(highlight.id);
         }
@@ -746,26 +750,14 @@ export class KakitoriView extends ItemView {
       false
     );
     sentenceText.addClass("has-interactive-highlights");
-    for (const character of sentenceText.querySelectorAll<HTMLElement>(
-      ".kakitori-sentence-character.is-highlighted"
-    )) {
-      const characterIndex = Number(character.dataset.characterIndex);
-      const highlight = sentence.highlights.find(
-        (candidate) =>
-          characterIndex >= candidate.start &&
-          characterIndex < candidate.end
-      );
-      if (!highlight) {
-        continue;
-      }
-      const revealed = this.recordRevealedHighlightIds.has(highlight.id);
-      character.classList.toggle("is-cloze", !revealed);
-      character.setAttribute(
-        "title",
-        revealed ? "点击重新遮住" : "点击解除遮住"
-      );
-    }
+    sentenceText.classList.toggle("is-sentence-cloze", !sentenceRevealed);
+    this.applyRecordClozeRuns(sentenceText, sentence, sentenceRevealed);
     sentenceText.addEventListener("click", (event) => {
+      if (!this.recordRevealedSentenceIds.has(sentence.id)) {
+        this.recordRevealedSentenceIds.add(sentence.id);
+        this.render();
+        return;
+      }
       const target =
         event.target instanceof HTMLElement
           ? event.target.closest<HTMLElement>(
@@ -826,6 +818,73 @@ export class KakitoriView extends ItemView {
         this.render();
       });
     }
+  }
+
+  private applyRecordClozeRuns(
+    sentenceText: HTMLElement,
+    sentence: KakitoriSentence,
+    sentenceRevealed: boolean
+  ): void {
+    const characters = Array.from(
+      sentenceText.querySelectorAll<HTMLElement>(
+        ".kakitori-sentence-character"
+      )
+    );
+    const covered = characters.map((character, index) => {
+      if (!sentenceRevealed) {
+        return true;
+      }
+      if (!character.classList.contains("is-highlighted")) {
+        character.setAttribute("title", "");
+        return false;
+      }
+      const highlight = sentence.highlights.find(
+        (candidate) => index >= candidate.start && index < candidate.end
+      );
+      if (!highlight) {
+        return false;
+      }
+      if (this.recordRevealedHighlightIds.has(highlight.id)) {
+        character.setAttribute("title", "点击重新遮住");
+        return false;
+      }
+      return true;
+    });
+    let runStart = -1;
+    const closeRun = (endExclusive: number): void => {
+      if (runStart < 0) {
+        return;
+      }
+      const run = characters.slice(runStart, endExclusive);
+      for (const character of run) {
+        character.addClass("is-cloze");
+        character.setAttribute(
+          "title",
+          sentenceRevealed ? "点击解除遮住" : "点击揭示句子"
+        );
+        character.addEventListener("mouseenter", () => {
+          for (const member of run) {
+            member.addClass("is-run-hover");
+          }
+        });
+        character.addEventListener("mouseleave", () => {
+          for (const member of run) {
+            member.removeClass("is-run-hover");
+          }
+        });
+      }
+      run[0].addClass("is-cloze-start");
+      run[run.length - 1].addClass("is-cloze-end");
+      runStart = -1;
+    };
+    for (const [index, isCovered] of covered.entries()) {
+      if (isCovered && runStart < 0) {
+        runStart = index;
+      } else if (!isCovered) {
+        closeRun(index);
+      }
+    }
+    closeRun(characters.length);
   }
 
   private openRecordMenu(

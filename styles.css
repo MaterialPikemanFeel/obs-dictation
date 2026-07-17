@@ -1609,16 +1609,46 @@
 
 .kakitori-record-sentence.has-interactive-highlights
   .kakitori-sentence-character.is-cloze {
-  border-radius: 3px;
+  border-radius: 0;
+  padding-block: 0.16em;
   color: transparent;
-  background: #77849e;
-  box-shadow: inset 0 0 0 1px rgba(79, 91, 115, 0.35);
-  transition: background 120ms ease;
+  cursor: pointer;
+  background: linear-gradient(180deg, #7d89a2 0%, #6b7893 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(49, 58, 80, 0.28);
+  text-shadow: none;
+  transition: background 140ms ease, box-shadow 140ms ease;
 }
 
 .kakitori-record-sentence.has-interactive-highlights
-  .kakitori-sentence-character.is-cloze:hover {
-  background: #8290aa;
+  .kakitori-sentence-character.is-cloze::selection {
+  color: transparent;
+  background: transparent;
+}
+
+.kakitori-record-sentence.has-interactive-highlights
+  .kakitori-sentence-character.is-cloze.is-cloze-start {
+  border-start-start-radius: 6px;
+  border-end-start-radius: 6px;
+}
+
+.kakitori-record-sentence.has-interactive-highlights
+  .kakitori-sentence-character.is-cloze.is-cloze-end {
+  border-start-end-radius: 6px;
+  border-end-end-radius: 6px;
+}
+
+.kakitori-record-sentence.has-interactive-highlights
+  .kakitori-sentence-character.is-cloze.is-run-hover {
+  background: linear-gradient(180deg, #8b96ae 0%, #7a86a0 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(49, 58, 80, 0.32);
+}
+
+.kakitori-record-sentence.is-sentence-cloze {
+  cursor: pointer;
 }
 
 .kakitori-record-note-editor {
