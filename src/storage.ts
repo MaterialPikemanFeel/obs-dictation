@@ -79,6 +79,7 @@ export class KakitoriStorage {
             : "practiced",
         paperSizeScale: clampScale(parsed.paperSizeScale),
         paperFontScale: clampScale(parsed.paperFontScale),
+        audioCacheLimitMb: clampCacheLimit(parsed.audioCacheLimitMb),
         azureRegion:
           parsed.azureRegion?.trim() || DEFAULT_SETTINGS.azureRegion,
         azureVoice:
@@ -318,4 +319,11 @@ function clampScale(value: unknown): number {
     return 1;
   }
   return Math.min(1.6, Math.max(0.7, value));
+}
+
+function clampCacheLimit(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return DEFAULT_SETTINGS.audioCacheLimitMb;
+  }
+  return Math.min(1000, Math.max(20, Math.round(value)));
 }

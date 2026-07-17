@@ -20,7 +20,10 @@ export default class KakitoriPlugin extends Plugin {
 
   async onload(): Promise<void> {
     this.storage = new KakitoriStorage(this.app);
-    this.tts = new AzureTtsService(this.app);
+    this.tts = new AzureTtsService(
+      this.app,
+      () => this.kakitoriSettings.audioCacheLimitMb * 1024 * 1024
+    );
     await this.storage.initialize();
     this.kakitoriSettings = await this.storage.loadSettings();
 
@@ -83,6 +86,15 @@ export default class KakitoriPlugin extends Plugin {
 
   async deleteMaterial(material: KakitoriMaterial): Promise<void> {
     await this.storage.deleteMaterial(material.id);
+    try {
+      await this.tts.removeCachedAudio(
+        material.sentences.map((sentence) => sentence.text),
+        this.kakitoriSettings.azureRegion,
+        this.kakitoriSettings.azureVoice
+      );
+    } catch {
+      // Cache cleanup is best-effort.
+    }
     new Notice(`已删除「${material.title}」`);
   }
 

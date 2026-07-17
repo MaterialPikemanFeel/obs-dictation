@@ -115,6 +115,54 @@ export class KakitoriSettingTab extends PluginSettingTab {
           })
       );
 
+    this.containerEl.createEl("h3", { text: "音频缓存" });
+
+    new Setting(this.containerEl)
+      .setName("缓存上限")
+      .setDesc("超出上限时自动删除最久未播放的音频，范围 20～1000 MB。")
+      .addSlider((slider) =>
+        slider
+          .setLimits(20, 1000, 20)
+          .setValue(this.plugin.kakitoriSettings.audioCacheLimitMb)
+          .setDynamicTooltip()
+          .onChange(async (value) => {
+            this.plugin.kakitoriSettings.audioCacheLimitMb = value;
+            await this.plugin.saveSettings();
+            await this.plugin.tts.enforceCacheLimit();
+          })
+      );
+
+    const usageSetting = new Setting(this.containerEl)
+      .setName("当前缓存")
+      .setDesc("计算中…");
+    const refreshUsage = async (): Promise<void> => {
+      try {
+        const usage = await this.plugin.tts.getCacheUsage();
+        usageSetting.setDesc(
+          usage.files === 0
+            ? "缓存为空。"
+            : `${usage.files} 个音频文件，共 ${formatBytes(usage.bytes)}。`
+        );
+      } catch {
+        usageSetting.setDesc("无法读取缓存目录。");
+      }
+    };
+    usageSetting.addButton((button) =>
+      button.setButtonText("清空缓存").onClick(async () => {
+        button.setDisabled(true);
+        try {
+          const removed = await this.plugin.tts.clearCache();
+          new Notice(`已删除 ${removed} 个缓存音频。`);
+        } catch {
+          new Notice("清空缓存失败。");
+        } finally {
+          button.setDisabled(false);
+          await refreshUsage();
+        }
+      })
+    );
+    void refreshUsage();
+
     this.containerEl.createEl("h3", { text: "Azure 语音" });
 
     const existingKey = this.plugin.getAzureSpeechKey();
@@ -320,6 +368,16 @@ export class KakitoriSettingTab extends PluginSettingTab {
         : "";
     return `${name} · ${gender} · ${voice.locale}${status}`;
   }
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function getVoiceModelLabel(voice: AzureVoiceOption): string {

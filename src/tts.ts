@@ -22,12 +22,26 @@ export interface AzureVoiceOption {
   styles: string[];
 }
 
+interface CacheEntry {
+  path: string;
+  size: number;
+  mtime: number;
+}
+
+export interface CacheUsage {
+  files: number;
+  bytes: number;
+}
+
 export class AzureTtsService {
   private currentAudio: HTMLAudioElement | null = null;
   private currentAudioUrl: string | null = null;
   private playRequestId = 0;
 
-  constructor(private readonly app: App) {}
+  constructor(
+    private readonly app: App,
+    private readonly getCacheLimitBytes: () => number
+  ) {}
 
   async prepare(text: string, config: AzureSpeechConfig): Promise<void> {
     await this.getAudio(text, config);
@@ -124,23 +138,108 @@ export class AzureTtsService {
     this.releaseAudioUrl();
   }
 
+  async getCacheUsage(): Promise<CacheUsage> {
+    const entries = await this.listCacheEntries();
+    return {
+      files: entries.length,
+      bytes: entries.reduce((total, entry) => total + entry.size, 0)
+    };
+  }
+
+  async clearCache(): Promise<number> {
+    const entries = await this.listCacheEntries();
+    await Promise.all(
+      entries.map(async (entry) => this.app.vault.adapter.remove(entry.path))
+    );
+    return entries.length;
+  }
+
+  async removeCachedAudio(
+    texts: string[],
+    region: string,
+    voice: string
+  ): Promise<void> {
+    await Promise.all(
+      texts.map(async (text) => {
+        const cachePath = await this.getCachePath(text, {
+          region,
+          voice,
+          subscriptionKey: ""
+        });
+        if (await this.app.vault.adapter.exists(cachePath)) {
+          await this.app.vault.adapter.remove(cachePath);
+        }
+      })
+    );
+  }
+
+  async enforceCacheLimit(): Promise<void> {
+    const limit = this.getCacheLimitBytes();
+    if (!Number.isFinite(limit) || limit <= 0) {
+      return;
+    }
+    const entries = await this.listCacheEntries();
+    let total = entries.reduce((sum, entry) => sum + entry.size, 0);
+    if (total <= limit) {
+      return;
+    }
+    entries.sort((left, right) => left.mtime - right.mtime);
+    for (const entry of entries) {
+      if (total <= limit) {
+        break;
+      }
+      await this.app.vault.adapter.remove(entry.path);
+      total -= entry.size;
+    }
+  }
+
+  private async listCacheEntries(): Promise<CacheEntry[]> {
+    const adapter = this.app.vault.adapter;
+    if (!(await adapter.exists(CACHE_DIRECTORY))) {
+      return [];
+    }
+    const listing = await adapter.list(CACHE_DIRECTORY);
+    const entries: CacheEntry[] = [];
+    for (const path of listing.files) {
+      if (!path.endsWith(".mp3")) {
+        continue;
+      }
+      const stat = await adapter.stat(path);
+      if (stat) {
+        entries.push({ path, size: stat.size, mtime: stat.mtime });
+      }
+    }
+    return entries;
+  }
+
+  private async getCachePath(
+    text: string,
+    config: AzureSpeechConfig
+  ): Promise<string> {
+    return normalizePath(
+      `${CACHE_DIRECTORY}/${await this.getCacheKey(text, config)}.mp3`
+    );
+  }
+
   private async getAudio(
     text: string,
     config: AzureSpeechConfig,
     forceRegenerate = false
   ): Promise<ArrayBuffer> {
-    const cachePath = normalizePath(
-      `${CACHE_DIRECTORY}/${await this.getCacheKey(text, config)}.mp3`
-    );
+    const cachePath = await this.getCachePath(text, config);
     if (
       !forceRegenerate &&
       (await this.app.vault.adapter.exists(cachePath))
     ) {
-      return this.app.vault.adapter.readBinary(cachePath);
+      const audioData = await this.app.vault.adapter.readBinary(cachePath);
+      // Rewrite on hit so mtime tracks recency for eviction.
+      void this.app.vault.adapter.writeBinary(cachePath, audioData);
+      return audioData;
     }
 
     const audioData = await this.synthesize(text, config);
     await this.app.vault.adapter.writeBinary(cachePath, audioData);
+    void this.enforceCacheLimit();
     return audioData;
   }
 

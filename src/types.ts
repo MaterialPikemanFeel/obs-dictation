@@ -8,6 +8,7 @@ export interface KakitoriSettings {
   librarySort: LibrarySort;
   paperSizeScale: number;
   paperFontScale: number;
+  audioCacheLimitMb: number;
   azureRegion: string;
   azureVoice: string;
   azureSpeechKey: string;
@@ -54,6 +55,7 @@ export const DEFAULT_SETTINGS: KakitoriSettings = {
   librarySort: "practiced",
   paperSizeScale: 1,
   paperFontScale: 1,
+  audioCacheLimitMb: 100,
   azureRegion: "eastus2",
   azureVoice: "ja-JP-NanamiNeural",
   azureSpeechKey: ""
