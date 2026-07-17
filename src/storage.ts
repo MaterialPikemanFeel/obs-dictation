@@ -77,6 +77,8 @@ export class KakitoriStorage {
           parsed.librarySort === "name"
             ? parsed.librarySort
             : "practiced",
+        paperSizeScale: clampScale(parsed.paperSizeScale),
+        paperFontScale: clampScale(parsed.paperFontScale),
         azureRegion:
           parsed.azureRegion?.trim() || DEFAULT_SETTINGS.azureRegion,
         azureVoice:
@@ -309,4 +311,11 @@ function normalizeHighlights(
       highlight.end > highlight.start &&
       highlight.end <= characterCount
   );
+}
+
+function clampScale(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return 1;
+  }
+  return Math.min(1.6, Math.max(0.7, value));
 }

@@ -770,7 +770,8 @@
 
 .kakitori-paper-shell {
   position: relative;
-  width: min(72vh, 100%, 760px);
+  width: calc(min(72vh, 100%, 760px) * var(--kakitori-paper-scale, 1));
+  max-width: 100%;
   padding: clamp(14px, 2vw, 24px);
   border: 1px solid var(--kakitori-border);
   border-radius: 12px;
@@ -823,7 +824,7 @@
   overflow: visible;
   color: #282a2e;
   font-family: "Klee One", "Yu Kyokasho", "Yu Mincho", "Hiragino Mincho ProN", serif;
-  font-size: clamp(11px, 1.35vw, 19px);
+  font-size: calc(clamp(11px, 1.35vw, 19px) * var(--kakitori-font-scale, 1));
   line-height: 1;
   pointer-events: none;
   user-select: text;
@@ -919,13 +920,41 @@
 
 .kakitori-mask.is-selected::before,
 .kakitori-mask.is-pinned::before {
-  border: 1.5px solid #5364d8;
-  background: #697896;
+  border: 1.5px solid #4657c9;
+  background: #5b6b93;
   box-shadow:
     0 0 0 2px #fffefb,
-    0 0 0 4px rgba(83, 100, 216, 0.82),
-    0 7px 16px rgba(42, 51, 72, 0.25);
+    0 0 0 5px rgba(74, 92, 214, 0.95),
+    0 8px 18px rgba(42, 51, 72, 0.3);
   animation: kakitori-mask-focus 160ms ease-out;
+}
+
+.kakitori-mask.is-focus-flash::before {
+  border-color: #d98b16;
+  animation: kakitori-mask-flash 620ms ease-out 2;
+}
+
+@keyframes kakitori-mask-flash {
+  0% {
+    box-shadow:
+      0 0 0 2px #fffefb,
+      0 0 0 6px rgba(240, 158, 36, 0.98),
+      0 8px 20px rgba(42, 51, 72, 0.32);
+  }
+
+  50% {
+    box-shadow:
+      0 0 0 2px #fffefb,
+      0 0 0 9px rgba(240, 158, 36, 0.5),
+      0 9px 22px rgba(42, 51, 72, 0.34);
+  }
+
+  100% {
+    box-shadow:
+      0 0 0 2px #fffefb,
+      0 0 0 5px rgba(74, 92, 214, 0.95),
+      0 8px 18px rgba(42, 51, 72, 0.3);
+  }
 }
 
 .kakitori-mask:focus-visible::before {
@@ -956,7 +985,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .kakitori-mask.is-selected::before,
-  .kakitori-mask.is-pinned::before {
+  .kakitori-mask.is-pinned::before,
+  .kakitori-mask.is-focus-flash::before {
     animation: none;
   }
 }
@@ -1577,6 +1607,20 @@
   background: rgba(255, 196, 42, 0.72);
 }
 
+.kakitori-record-sentence.has-interactive-highlights
+  .kakitori-sentence-character.is-cloze {
+  border-radius: 3px;
+  color: transparent;
+  background: #77849e;
+  box-shadow: inset 0 0 0 1px rgba(79, 91, 115, 0.35);
+  transition: background 120ms ease;
+}
+
+.kakitori-record-sentence.has-interactive-highlights
+  .kakitori-sentence-character.is-cloze:hover {
+  background: #8290aa;
+}
+
 .kakitori-record-note-editor {
   display: grid;
   justify-items: end;
@@ -1890,7 +1934,7 @@
   }
 
   .kakitori-paper-character {
-    font-size: clamp(8px, 3vw, 15px);
+    font-size: calc(clamp(8px, 3vw, 15px) * var(--kakitori-font-scale, 1));
   }
 
   .kakitori-import-preview {

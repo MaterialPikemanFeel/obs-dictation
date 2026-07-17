@@ -43,6 +43,7 @@ export class KakitoriView extends ItemView {
   private currentCardIndex = 0;
   private cardRevealed = false;
   private readonly revealedSentenceIds = new Set<string>();
+  private pendingFocusSentenceId: string | null = null;
   private selectedSentenceId: string | null = null;
   private pinnedSentenceId: string | null = null;
   private notesTab: NotesTab = "sentence";
@@ -52,6 +53,7 @@ export class KakitoriView extends ItemView {
   private recordSort: RecordSort = "article-order";
   private readonly collapsedRecordMaterialIds = new Set<string>();
   private readonly expandedRecordNoteIds = new Set<string>();
+  private readonly recordRevealedHighlightIds = new Set<string>();
   private playbackSpeed = 1;
   private floatingControlsEl: HTMLElement | null = null;
   private selectionPopoverEl: HTMLElement | null = null;
@@ -689,6 +691,43 @@ export class KakitoriView extends ItemView {
       }
       this.render();
     });
+    const play = actions.createEl("button", {
+      attr: {
+        "aria-label": "播放听写",
+        title: "播放听写"
+      }
+    });
+    setIcon(play, "volume-2");
+    play.addEventListener("click", () => {
+      void this.playRecordSentence(sentence, play);
+    });
+
+    const allRevealed =
+      sentence.highlights.length > 0 &&
+      sentence.highlights.every((highlight) =>
+        this.recordRevealedHighlightIds.has(highlight.id)
+      );
+    const revealAll = actions.createEl("button", {
+      cls: allRevealed ? "is-active" : "",
+      attr: {
+        "aria-label": allRevealed ? "重新遮住" : "显示全文",
+        title: allRevealed ? "重新遮住" : "显示全文"
+      }
+    });
+    setIcon(revealAll, allRevealed ? "eye-off" : "eye");
+    revealAll.addEventListener("click", () => {
+      if (allRevealed) {
+        for (const highlight of sentence.highlights) {
+          this.recordRevealedHighlightIds.delete(highlight.id);
+        }
+      } else {
+        for (const highlight of sentence.highlights) {
+          this.recordRevealedHighlightIds.add(highlight.id);
+        }
+      }
+      this.render();
+    });
+
     const more = actions.createEl("button", {
       attr: {
         "aria-label": "更多操作",
@@ -707,10 +746,24 @@ export class KakitoriView extends ItemView {
       false
     );
     sentenceText.addClass("has-interactive-highlights");
-    for (const highlighted of sentenceText.querySelectorAll<HTMLElement>(
+    for (const character of sentenceText.querySelectorAll<HTMLElement>(
       ".kakitori-sentence-character.is-highlighted"
     )) {
-      highlighted.setAttribute("title", "点击管理这段高亮");
+      const characterIndex = Number(character.dataset.characterIndex);
+      const highlight = sentence.highlights.find(
+        (candidate) =>
+          characterIndex >= candidate.start &&
+          characterIndex < candidate.end
+      );
+      if (!highlight) {
+        continue;
+      }
+      const revealed = this.recordRevealedHighlightIds.has(highlight.id);
+      character.classList.toggle("is-cloze", !revealed);
+      character.setAttribute(
+        "title",
+        revealed ? "点击重新遮住" : "点击解除遮住"
+      );
     }
     sentenceText.addEventListener("click", (event) => {
       const target =
@@ -728,9 +781,15 @@ export class KakitoriView extends ItemView {
           characterIndex >= candidate.start &&
           characterIndex < candidate.end
       );
-      if (highlight) {
-        this.openHighlightMenu(event, material, sentence, highlight.id);
+      if (!highlight) {
+        return;
       }
+      if (this.recordRevealedHighlightIds.has(highlight.id)) {
+        this.recordRevealedHighlightIds.delete(highlight.id);
+      } else {
+        this.recordRevealedHighlightIds.add(highlight.id);
+      }
+      this.render();
     });
 
     if (this.expandedRecordNoteIds.has(sentence.id)) {
@@ -775,9 +834,26 @@ export class KakitoriView extends ItemView {
     sentence: KakitoriSentence
   ): void {
     const menu = new Menu();
+    const characters = Array.from(sentence.text);
+    for (const highlight of sentence.highlights) {
+      const label = characters
+        .slice(highlight.start, highlight.end)
+        .join("");
+      menu.addItem((item) => {
+        item
+          .setTitle(`取消高亮「${label}」`)
+          .setIcon("eraser")
+          .onClick(() => {
+            this.removeSentenceHighlight(material, sentence, highlight.id);
+          });
+      });
+    }
+    if (sentence.highlights.length > 0) {
+      menu.addSeparator();
+    }
     menu.addItem((item) => {
       item
-        .setTitle("删除记录")
+        .setTitle("删除整条记录")
         .setIcon("trash-2")
         .onClick(() => this.confirmDeleteRecord(material, sentence));
     });
@@ -802,24 +878,6 @@ export class KakitoriView extends ItemView {
         this.render();
       }
     ).open();
-  }
-
-  private openHighlightMenu(
-    event: MouseEvent,
-    material: KakitoriMaterial,
-    sentence: KakitoriSentence,
-    highlightId: string
-  ): void {
-    const menu = new Menu();
-    menu.addItem((item) => {
-      item
-        .setTitle("取消这段高亮")
-        .setIcon("eraser")
-        .onClick(() => {
-          this.removeSentenceHighlight(material, sentence, highlightId);
-        });
-    });
-    menu.showAtMouseEvent(event);
   }
 
   private renderArticleHome(
@@ -1181,6 +1239,14 @@ export class KakitoriView extends ItemView {
     layout: PaperPageLayout
   ): void {
     const shell = paperArea.createDiv({ cls: "kakitori-paper-shell" });
+    shell.style.setProperty(
+      "--kakitori-paper-scale",
+      `${this.plugin.kakitoriSettings.paperSizeScale}`
+    );
+    shell.style.setProperty(
+      "--kakitori-font-scale",
+      `${this.plugin.kakitoriSettings.paperFontScale}`
+    );
     if (layout.continuesFromPrevious) {
       shell.createDiv({
         cls: "kakitori-continuation is-previous",
@@ -1319,6 +1385,7 @@ export class KakitoriView extends ItemView {
     if (this.pinnedSentenceId) {
       this.showFloatingControls(this.pinnedSentenceId, material);
     }
+    this.applyPendingFocus();
     if (layout.continuesOnNext) {
       shell.createDiv({
         cls: "kakitori-continuation is-next",
@@ -1994,6 +2061,31 @@ export class KakitoriView extends ItemView {
     controls.style.top = `${Math.max(8, y)}px`;
   }
 
+  private applyPendingFocus(): void {
+    const sentenceId = this.pendingFocusSentenceId;
+    this.pendingFocusSentenceId = null;
+    if (!sentenceId || !this.paperEl) {
+      return;
+    }
+    const regions = Array.from(
+      this.paperEl.querySelectorAll<HTMLElement>(
+        `.kakitori-sentence-region[data-sentence-id="${sentenceId}"]`
+      )
+    );
+    if (regions.length === 0) {
+      return;
+    }
+    regions[0].scrollIntoView({ block: "center", behavior: "smooth" });
+    for (const region of regions) {
+      region.classList.remove("is-focus-flash");
+      void region.offsetWidth;
+      region.classList.add("is-focus-flash");
+      window.setTimeout(() => {
+        region.classList.remove("is-focus-flash");
+      }, 1400);
+    }
+  }
+
   private updateSentenceRegionClasses(): void {
     if (!this.paperEl) {
       return;
@@ -2150,9 +2242,9 @@ export class KakitoriView extends ItemView {
     this.cardSequenceIds = [];
     this.cardRevealed = false;
     this.revealedSentenceIds.clear();
-    this.revealedSentenceIds.add(sentenceId);
     this.selectedSentenceId = sentenceId;
     this.pinnedSentenceId = sentenceId;
+    this.pendingFocusSentenceId = sentenceId;
     this.notesTab = "highlights";
     void this.plugin.saveMaterial(material);
     this.render();
@@ -2318,6 +2410,34 @@ export class KakitoriView extends ItemView {
       }
     } catch {
       new Notice("语音播放失败，请检查 Azure 区域、密钥和网络。");
+    }
+  }
+
+  private async playRecordSentence(
+    sentence: KakitoriSentence,
+    button: HTMLButtonElement
+  ): Promise<void> {
+    const config = this.getAzureSpeechConfig();
+    if (!config) {
+      new Notice("请先在 Kakitori 设置中填写 Azure 区域与 Speech 密钥。");
+      return;
+    }
+    if (button.disabled) {
+      return;
+    }
+    button.disabled = true;
+    button.addClass("is-loading");
+    try {
+      await this.plugin.tts.play(
+        sentence.text,
+        config,
+        this.playbackSpeed
+      );
+    } catch {
+      new Notice("播放失败，请检查 Azure 密钥与网络连接。");
+    } finally {
+      button.disabled = false;
+      button.removeClass("is-loading");
     }
   }
 

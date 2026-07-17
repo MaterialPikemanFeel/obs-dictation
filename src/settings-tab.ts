@@ -85,6 +85,36 @@ export class KakitoriSettingTab extends PluginSettingTab {
           })
       );
 
+    new Setting(this.containerEl)
+      .setName("原稿纸大小")
+      .setDesc("调整整张 20×20 原稿纸的显示尺寸（格子数量不变），范围 70%～160%。")
+      .addSlider((slider) =>
+        slider
+          .setLimits(0.7, 1.6, 0.05)
+          .setValue(this.plugin.kakitoriSettings.paperSizeScale)
+          .setDynamicTooltip()
+          .onChange(async (value) => {
+            this.plugin.kakitoriSettings.paperSizeScale = value;
+            await this.plugin.saveSettings();
+            await this.plugin.refreshViews();
+          })
+      );
+
+    new Setting(this.containerEl)
+      .setName("原稿纸文字大小")
+      .setDesc("调整格子内文字的字号，范围 70%～160%。")
+      .addSlider((slider) =>
+        slider
+          .setLimits(0.7, 1.6, 0.05)
+          .setValue(this.plugin.kakitoriSettings.paperFontScale)
+          .setDynamicTooltip()
+          .onChange(async (value) => {
+            this.plugin.kakitoriSettings.paperFontScale = value;
+            await this.plugin.saveSettings();
+            await this.plugin.refreshViews();
+          })
+      );
+
     this.containerEl.createEl("h3", { text: "Azure 语音" });
 
     const existingKey = this.plugin.getAzureSpeechKey();

@@ -6,6 +6,8 @@ export interface KakitoriSettings {
   defaultDirection: WritingDirection;
   showSentenceNumbersOnHover: boolean;
   librarySort: LibrarySort;
+  paperSizeScale: number;
+  paperFontScale: number;
   azureRegion: string;
   azureVoice: string;
   azureSpeechKey: string;
@@ -50,6 +52,8 @@ export const DEFAULT_SETTINGS: KakitoriSettings = {
   defaultDirection: "vertical",
   showSentenceNumbersOnHover: false,
   librarySort: "practiced",
+  paperSizeScale: 1,
+  paperFontScale: 1,
   azureRegion: "eastus2",
   azureVoice: "ja-JP-NanamiNeural",
   azureSpeechKey: ""
